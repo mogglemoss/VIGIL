@@ -156,3 +156,75 @@ Two things to watch:
   the clip to find `◆ MARKER 3` is how you confirm a press landed. v1 must
   exclude it, via `SCContentFilter(display:excludingApplications:)` on our own
   process, or every saved clip carries our HUD into the edit.
+
+## Where this sits with CCP's rules
+
+CCP's [Third Party Policies](https://support.eveonline.com/hc/en-us/articles/8564030965660-Third-Party-Policies)
+draw the line at modifying the client, not at watching the screen. The
+prohibitions it cites from the EULA are:
+
+> **6.A.2** You may not use your own or third-party software to modify any
+> content appearing within the Game environment or change how the Game is
+> played.
+>
+> **6.A.3** You may not use your own or any third-party software, macros or
+> other stored rapid keystrokes … that facilitate acquisition of items,
+> currency, objects, character attributes, rank or status at an accelerated
+> rate …
+>
+> **9.C** You may not reverse engineer, disassemble or decompile … or analyze,
+> decipher, "sniff" or derive code … from any packet stream …
+
+And the tolerance:
+
+> We may, in our discretion, tolerate the use of applications or other software
+> that simply enhance player enjoyment in a way that maintains fair gameplay.
+> For instance, the use of programs that provide in-game overlays (Mumble,
+> Teamspeak) is not something we plan to actively police at this time.
+
+This app stays on the safe side of all of it, and the design should keep it
+there:
+
+- **Nothing is injected.** No code runs in EVE's address space, no memory is
+  read, no DLL or dylib is loaded into the client. The overlay is a separate
+  `NSWindow` composited by WindowServer — strictly less invasive than the
+  Mumble/TeamSpeak overlays CCP names, which hook the graphics API.
+- **Capture is an OS read.** ScreenCaptureKit reads the framebuffer and Core
+  Audio taps output streams. Identical to OBS or QuickTime.
+- **The hotkey receives, never sends.** `RegisterEventHotKey` observes a global
+  key event. Nothing is ever synthesised into EVE. No macros, no keystrokes.
+- **No packets, no cache, no game data.** Nothing is parsed, scraped or
+  decoded. The app cannot tell a fleet fight from a screensaver.
+
+**The constraint that keeps it that way:** never make the app react to game
+state. No OCR of the overview, no pixel-watching to auto-save, no log parsing.
+The moment it derives meaning from what is on screen, it stops being a video
+recorder and starts looking like something that reads game data. It records
+pixels and sound; a human presses the key.
+
+CCP is explicit that none of this is a guarantee — "any use of third party
+tools is done entirely at your own risk", and they decline to publish a list of
+approved configurations. This is a reading of the policy, not permission from
+CCP.
+
+### Publishing the footage
+
+Separate policy: the
+[Content Creation Terms of Use](https://support.eveonline.com/hc/en-us/articles/8563917741084-EVE-Online-Content-Creation-Terms-of-Use).
+YouTube ad revenue is explicitly fine; paywalling is not.
+
+> **Non-Commercial** – your content must be available free of charge to everyone
+> and cannot be blocked behind a paywall or premium subscription.
+>
+> **Monetization** – you can monetize the content by generating revenue through
+> appropriate passive advertisement, e.g., pre-roll video ads, website ads,
+> sponsor ad overlays. Soliciting personal donations or offering
+> subscription-based content is also permissible …
+
+Content that could be mistaken for CCP's own work needs their exact wording:
+
+> This material is used with limited permission of CCP Games. No official
+> affiliation or endorsement by CCP Games is stated or implied.
+
+CCP also reserve "the unconditional right to request the removal of any
+user-generated content for any reason".
