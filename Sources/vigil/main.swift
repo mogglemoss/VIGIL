@@ -481,6 +481,16 @@ final class Controller: NSObject, NSApplicationDelegate {
             if track.mediaType == .video { videoSeconds = d }
             if track.mediaType == .audio { audioSeconds = d }
         }
+        // The question that matters in use: does the watch keep standing after a
+        // record is filed? Strike twice in one fight and the second must still
+        // reach backwards.
+        let heldAtSave = ring.heldSeconds
+        let framesAtSave = stats.framesWritten
+        try? await Task.sleep(nanoseconds: 6_000_000_000)
+        let heldAfter = ring.heldSeconds
+        let framesAfter = stats.framesWritten
+        let stillBuffering = framesAfter > framesAtSave && heldAfter > 0
+
         let expected = held + 5
         let ok = tracks.count == 2 && videoSeconds > expected * 0.7 && audioSeconds > 0
 
@@ -491,6 +501,10 @@ final class Controller: NSObject, NSApplicationDelegate {
         │ expected   ~\(String(format: "%.1f", expected)) s  (buffer + 5 s live)
         │ got        \(tracks.count) tracks · video \(String(format: "%.1f", videoSeconds)) s · audio \(String(format: "%.1f", audioSeconds)) s
         │ verdict    \(ok ? "✓ the past really is in the clip" : "✗ clip is short or missing a track")
+        │
+        │ after      6 s later: \(String(format: "%.0f", heldAfter)) s held (was \(String(format: "%.0f", heldAtSave)) s at the save)
+        │            \(framesAfter - framesAtSave) frames encoded since filing
+        │ watch      \(stillBuffering ? "✓ still buffering — strike again and it still reaches back" : "✗ stopped after filing")
         └─────────────────────────────────────────────────────────────────
         """)
         finish()
