@@ -22,6 +22,8 @@ final class Controller: NSObject, NSApplicationDelegate {
     let tap = AudioTap()
     let encoder = Encoder()
     let overlay = Overlay()
+    let menuBar = MenuBar()
+    var lastClip: URL?
     var ring: ReplayBuffer!
 
     /// Guards the handoff between the ring and an open clip. Without it, a
@@ -40,6 +42,7 @@ final class Controller: NSObject, NSApplicationDelegate {
     init(config: Config) { self.config = config }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if !config.listOnly && !config.checkOnly { installMenuBar() }
         installHotkeys()
         Task { await self.start() }
     }
@@ -47,6 +50,11 @@ final class Controller: NSObject, NSApplicationDelegate {
     // MARK: - Start
 
     func start() async {
+        if let directory = config.overlaySample {
+            await overlay.sample(into: directory)
+            Log.good("overlay states written to \(directory.path)")
+            exit(0)
+        }
         if config.listOnly { listAudioProcesses(); return }
         if config.checkOnly { await checkAudioOnly(); return }
         do {
@@ -103,7 +111,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             }
 
             preflight(bitrate: bitrate)
-            overlay.flash("● BUFFERING", seconds: 2.2)
+            overlay.flash("Observing", stamp: "Buffer live", seconds: 2.4)
             startedAt = Date()
             startTicker()
             if config.selfTest { Task { await self.runSelfTest() } }
@@ -116,6 +124,37 @@ final class Controller: NSObject, NSApplicationDelegate {
         }
     }
 
+    func installMenuBar() {
+        menuBar.clipsDirectory = config.outputDir
+        menuBar.readState = { [weak self] in
+            guard let self else { return MenuBar.State() }
+            var state = MenuBar.State()
+            state.observing = self.ring != nil
+            state.clipping = self.clip != nil
+            state.heldSeconds = self.ring?.heldSeconds ?? 0
+            state.windowSeconds = self.ring?.window ?? self.config.length
+            state.clipSeconds = self.clip == nil ? 0 : Date().timeIntervalSince(self.clipStartedAt)
+            state.gigabytes = Double(self.ring?.bytes ?? 0) / 1_073_741_824
+            state.clipsSaved = self.clipsSaved
+            state.lastClip = self.lastClip
+            switch self.config.audio {
+            case .processes(let ids): state.audioDescription = ids.joined(separator: " + ")
+            case .globalExcludingSelf: state.audioDescription = "all audio"
+            }
+            return state
+        }
+        menuBar.onToggleClip = { [weak self] in self?.toggleClip() }
+        menuBar.onQuit = { [weak self] in self?.finish() }
+        menuBar.onSetLength = { [weak self] seconds in
+            guard let self else { return }
+            self.ring?.setWindow(seconds)
+            Log.info("replay length now \(Int(seconds)) s")
+            self.overlay.flash("Observing", stamp: "\(Int(seconds)) s held",
+                               tint: Overlay.Ink.sage)
+        }
+        menuBar.install()
+    }
+
     // MARK: - Clips
 
     func toggleClip() {
@@ -126,7 +165,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         clipLock.lock()
         guard clip == nil, let snapshot = ring?.snapshot() else {
             clipLock.unlock()
-            overlay.flash("… NOTHING BUFFERED YET")
+            overlay.flash("Observing", stamp: "Nothing held", tint: Overlay.Ink.fog)
             return
         }
         do {
@@ -138,7 +177,8 @@ final class Controller: NSObject, NSApplicationDelegate {
             clipLock.unlock()
 
             let from = String(format: "%.0f", snapshot.seconds)
-            overlay.flash("● CLIP  from -\(from)s", seconds: 2.4)
+            overlay.flash("Witnessing", stamp: "from −\(from) s",
+                          tint: Overlay.Ink.bright, seconds: 2.4)
             Log.good("clip open — \(from) s of buffer, recording live → \(url.lastPathComponent)")
             if !snapshot.coversFullWindow {
                 Log.warn("buffer held \(from) s, not the full \(Int(config.length)) s "
@@ -147,7 +187,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         } catch {
             clipLock.unlock()
             Log.fail("could not open clip: \(error.localizedDescription)")
-            overlay.flash("✗ CLIP FAILED")
+            overlay.flash("Not filed", stamp: "Failed", tint: Overlay.Ink.blood)
         }
     }
 
@@ -164,13 +204,15 @@ final class Controller: NSObject, NSApplicationDelegate {
         guard let writer = takeClip() else { return }
 
         let live = Date().timeIntervalSince(clipStartedAt)
-        overlay.flash("■ SAVING…", seconds: 1.4)
+        overlay.flash("Filing", stamp: "in hand", tint: Overlay.Ink.fog, seconds: 1.4)
         let began = Date()
         let result = await writer.finish()
         let took = Date().timeIntervalSince(began)
         clipsSaved += 1
+        lastClip = result.url
 
-        overlay.flash(String(format: "■ SAVED  %.0fs", result.seconds), seconds: 2.4)
+        overlay.flash("Filed", stamp: String(format: "%.0f s", result.seconds),
+                      tint: Overlay.Ink.sage, seconds: 2.6)
         Log.good(String(format: "saved %.1f s (%.0f s buffered + %.0f s live) · %.0f MB · muxed in %.2f s",
                         result.seconds, writer.startedFrom, live,
                         Double(result.bytes) / 1_048_576, took))
@@ -247,7 +289,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         │ audio     \(audioLine)
         │ overlay   \(video.excludedSelf ? "excluded from capture" : "NOT excluded — it will be in your clips")
         │ output    \(config.outputDir.path)
-        │ hotkeys   ⌥⌘S start / stop a clip   ·   ⌥⌘Q quit
+        │ hotkeys   ⌥⌘S start / stop a clip   ·   ⌥⌘Q quit  (also in the menu bar)
         └─────────────────────────────────────────────────────────────────
 
         Nothing reaches the disk until you press ⌥⌘S. That opens a clip with
@@ -263,9 +305,10 @@ final class Controller: NSObject, NSApplicationDelegate {
         timer.schedule(deadline: .now() + 1, repeating: 1)
         timer.setEventHandler { [weak self] in
             guard let self, !self.stopping, let ring = self.ring else { return }
+            self.menuBar.refresh()
             let rolled = self.stats.roll()
             let state = self.clip == nil
-                ? String(format: "buffer %3.0f/%.0f s", ring.heldSeconds, self.config.length)
+                ? String(format: "buffer %3.0f/%.0f s", ring.heldSeconds, ring.window)
                 : String(format: "CLIP   %3.0f s", Date().timeIntervalSince(self.clipStartedAt))
             Log.raw(String(format: "[%@] %@  %5.2f GB   %5.1f fps  idle %d   audio %@   a/v %+.0f ms",
                            Log.stamp, state,

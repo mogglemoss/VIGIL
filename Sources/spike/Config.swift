@@ -17,6 +17,7 @@ struct Config {
     var audio: AudioMode = .processes(["EVE.app"])
     var length: Double = 300      // seconds retained in the ring
     var capGB: Double = 8         // hard memory ceiling regardless of length
+    var overlaySample: URL?      // --overlay-sample <dir>: render the states
     var selfTest = false         // --selftest: exercise ring -> clip -> file
     var listOnly = false         // --list: dump the audio process list
     var checkOnly = false        // --check: prove the tap alone, no video
@@ -63,6 +64,8 @@ struct Config {
                 if let v = next(), let d = Double(v) { c.length = max(10, min(1800, d)) }
             case "--cap":
                 if let v = next(), let d = Double(v) { c.capGB = max(0.5, min(24, d)) }
+            case "--overlay-sample":
+                if let v = next() { c.overlaySample = URL(fileURLWithPath: (v as NSString).expandingTildeInPath) }
             case "--selftest":
                 c.selfTest = true
             case "--list":

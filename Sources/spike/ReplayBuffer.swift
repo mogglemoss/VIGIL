@@ -48,7 +48,7 @@ final class ReplayBuffer {
     private var segments: [Segment] = []
     private var audio: [(sample: CMSampleBuffer, pts: CMTime, bytes: Int)] = []
 
-    let window: Double              // seconds to retain
+    private(set) var window: Double  // seconds to retain
     let byteCap: Int                // hard ceiling, whatever the window says
 
     private(set) var videoBytes = 0
@@ -62,6 +62,12 @@ final class ReplayBuffer {
     }
 
     var bytes: Int { videoBytes + audioBytes }
+
+    /// Changing the window live is safe: shrinking takes effect on the next
+    /// append, growing simply fills over time.
+    func setWindow(_ seconds: Double) {
+        lock.lock(); window = seconds; lock.unlock()
+    }
 
     var heldSeconds: Double {
         lock.lock(); defer { lock.unlock() }

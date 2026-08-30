@@ -48,6 +48,19 @@ everything Core Audio can currently see.
 open). `⌥` is Option, not Shift. An overlay at the bottom of the screen confirms
 each one — it draws over fullscreen EVE.
 
+Everything is also in the **menu bar**: current state and buffer fill, start and
+stop, replay length, the clips folder, and quit. There is no dock icon and no
+main menu — the app is `.accessory` so it can never take focus from EVE — which
+makes the status item the only way to reach it without a hotkey, and the only
+way to quit if the terminal is gone. Failing that:
+
+```bash
+pkill -f 'Observance Spike'
+```
+
+`--overlay-sample <dir>` renders every overlay state to PNG, so the stationery
+can be iterated on without a capture run and a lucky frame grab.
+
 `--selftest` runs the whole path — fill the ring, save a clip, verify the file —
 with no key press, which is how to check a change did not break the save.
 
@@ -104,6 +117,30 @@ unfilled gap does not leave a hole — it drags every later sample earlier. Gaps
 have to be paid for in generated silence.
 
 Neither throws. Neither logs. Both give you a file that plays.
+
+## The stationery
+
+The overlay is dressed as Ministry stationery per `docs/stationery.md` in the
+estate repo: ink ground, a hairline `--line` rule, Geist Mono micro-caps with
+0.18em tracking, and the rotated stamp lifted from the registry panel —
+`rotate(4deg)`, 1.5px border in the state's own ink.
+
+The stamp colour carries meaning, using the palette's own semantics:
+`--sage` for held and filed, `--bright` while witnessing, `--fog` for nothing
+held, `--blood` for a failure.
+
+The instrument observes. It does not record.
+
+| State | Stamp |
+|---|---|
+| `OBSERVING` | buffer live, or nothing held |
+| `WITNESSING` | how far back the clip reaches |
+| `FILING` | in hand |
+| `FILED` | the clip's length |
+| `NOT FILED` | failed |
+
+The Ministry glyph is specified in the stationery but has no asset yet, so the
+status item wears a plain eye until one exists.
 
 ## How the ring works
 
