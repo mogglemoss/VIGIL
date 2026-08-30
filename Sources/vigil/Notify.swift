@@ -22,7 +22,9 @@ enum Notify {
         Log.raw(message)
         guard !hasTerminal else { return }
         onMain {
-            NSApp.setActivationPolicy(.regular)   // so the dialog can come forward
+            // Deliberately not switching activation policy: an accessory app can
+            // show a modal perfectly well, and changing policy is what puts
+            // windows through transform animations.
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
             alert.alertStyle = .critical

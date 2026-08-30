@@ -57,6 +57,15 @@ final class Controller: NSObject, NSApplicationDelegate {
             await overlay.sample(into: directory)
             await about.sample(into: directory)
             await preferences.sample(into: directory)
+            // Open and close both sheets for real. A window that releases
+            // itself on close, while we also hold it, takes the whole app down
+            // — and only the closing proves it.
+            await MainActor.run {
+                about.show(); about.close()
+                preferences.show(); preferences.close()
+            }
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            Log.good("both sheets opened and closed without incident")
             Log.good("overlay states and the about screen written to \(directory.path)")
             exit(0)
         }

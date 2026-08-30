@@ -142,6 +142,11 @@ final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "VIGIL — Standing Orders"
+        // AppKit releases a programmatically-created window when it closes, and
+        // we hold a strong reference to it as well. Leaving this true means
+        // closing the sheet releases it twice and the app dies inside the close
+        // animation. Overlay had this right; these two did not.
+        window.isReleasedWhenClosed = false
         window.titlebarAppearsTransparent = true
         window.backgroundColor = Overlay.Ink.ground.withAlphaComponent(1)
         window.delegate = self
@@ -329,6 +334,8 @@ final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
+
+    func close() { window?.close() }
 
     func windowWillClose(_ notification: Notification) { window = nil }
 
