@@ -71,6 +71,9 @@ final class AudioTap {
     private var mode: AudioMode = .globalExcludingSelf
     private var trackedProcesses: Set<AudioObjectID> = []
     private var listener: AudioObjectPropertyListenerBlock?
+    private var deviceListener: AudioObjectPropertyListenerBlock?
+    private var pendingDeviceChange: DispatchWorkItem?
+    private var attachedOutputUID: String?
     private var pendingReconcile: DispatchWorkItem?
     /// Core Audio can hand back one more buffer as the IOProc is torn down, and
     /// its timestamp belongs to the old session. Letting that into the ring puts
@@ -83,8 +86,17 @@ final class AudioTap {
     func start(mode: AudioMode, onSample: @escaping (CMSampleBuffer, Float) -> Void) throws {
         self.onSample = onSample
         self.mode = mode
-        try attach()
+        do {
+            try attach()
+        } catch let failure as Failure where failure.stage.hasPrefix("no running audio process") {
+            // Not an error. VIGIL is expected to stand before EVE does, and the
+            // process listener will attach the moment it opens an output stream.
+            state = .waitingForProcesses
+            onStateChange?(state)
+            Log.info("no tapped process yet — the watch will attach when one appears")
+        }
         watchProcessList()
+        watchOutputDevice()
     }
 
     private func attach() throws {
@@ -214,6 +226,7 @@ final class AudioTap {
                 kAudioSubTapUIDKey: tapUID
             ]]
         ]
+        attachedOutputUID = outputUID
         let status = AudioHardwareCreateAggregateDevice(description as CFDictionary, &aggregateID)
         guard status == noErr, aggregateID != AudioObjectID(kAudioObjectUnknown) else {
             throw Failure(stage: "AudioHardwareCreateAggregateDevice", status: status)
@@ -269,6 +282,51 @@ final class AudioTap {
         } else {
             Log.warn("could not watch the audio process list (OSStatus \(status)) — "
                      + "EVE relaunching will drop its audio until you restart")
+        }
+    }
+
+    /// The aggregate device is built around whatever the default output was at
+    /// the time. Unplug headphones, wake a display that owns the audio route, or
+    /// switch devices, and the tap keeps delivering from a device that is no
+    /// longer the one playing — silently. Rebuild when the default moves.
+    private func watchOutputDevice() {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            guard let self else { return }
+            self.pendingDeviceChange?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.rebuildForDeviceChange() }
+            self.pendingDeviceChange = work
+            self.control.asyncAfter(deadline: .now() + 0.8, execute: work)
+        }
+        if AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject),
+                                               &address, control, block) == noErr {
+            deviceListener = block
+        }
+    }
+
+    private func rebuildForDeviceChange() {
+        guard case .attached = state else { return }
+        let uid = AudioProcesses.defaultOutputDeviceUID()
+        guard uid != attachedOutputUID else { return }
+        Log.warn("default output device changed — rebuilding the tap")
+        let previousRate = asbd.mSampleRate
+        detach()
+        do {
+            try attach()
+            if asbd.mSampleRate != previousRate && previousRate > 0 {
+                Log.warn(String(format: "stream format changed with the device (%.0f → %.0f Hz)"
+                                + " — dropping buffered audio", previousRate, asbd.mSampleRate))
+                onFormatChange?()
+            }
+            Log.good("audio reattached to the new output device")
+        } catch {
+            state = .failed(error.localizedDescription)
+            onStateChange?(state)
+            Log.fail("could not rebuild the tap after the device changed: "
+                     + error.localizedDescription)
         }
     }
 
@@ -395,6 +453,16 @@ final class AudioTap {
 
     func stop() {
         pendingReconcile?.cancel()
+        pendingDeviceChange?.cancel()
+        if let deviceListener {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain)
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject), &address, control, deviceListener)
+            self.deviceListener = nil
+        }
         if let listener {
             var address = AudioObjectPropertyAddress(
                 mSelector: kAudioHardwarePropertyProcessObjectList,

@@ -81,7 +81,7 @@ final class ChordField: NSView {
 final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
 
     private var window: NSWindow?
-    private static let size = NSSize(width: 470, height: 514)
+    private static let size = NSSize(width: 470, height: 554)
 
     /// Applied immediately.
     var onHotKeyChanged: ((Settings.HotKey) -> Bool)?   // returns false if refused
@@ -92,6 +92,7 @@ final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
 
     private var folderLabel: NSTextField?
     private var noteLabel: NSTextField?
+    private var loginBox: NSButton?
 
     private static func mono(_ pt: CGFloat) -> NSFont {
         NSFont(name: "GeistMono-Medium", size: pt)
@@ -165,6 +166,24 @@ final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
         // recalculation of every y below it.
         var y = size.height - 96
         let step: CGFloat = 40
+
+        // ── standing at login ────────────────────────────────────────────────
+        row("Stand at login", y: y, in: content)
+        let login = NSButton(checkboxWithTitle: "  Start VIGIL when I log in",
+                             target: self, action: #selector(setLogin(_:)))
+        login.frame = NSRect(x: 196, y: y - 3, width: 250, height: 20)
+        login.font = Self.mono(11)
+        switch LoginItem.state {
+        case .on: login.state = .on
+        case .needsApproval:
+            login.state = .on
+            login.title = "  Awaiting your approval"
+        case .off: login.state = .off
+        case .unavailable: login.state = .off; login.isEnabled = false
+        }
+        content.addSubview(login)
+        loginBox = login
+        y -= step
 
         // ── the chord ────────────────────────────────────────────────────────
         row("Strike the record", y: y, in: content)
@@ -306,6 +325,30 @@ final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
         }
         onRestartNeeded?()
         note("Audio changes when the watch next stands. Quit and start it again.")
+    }
+
+    @objc private func setLogin(_ sender: NSButton) {
+        let wanted = sender.state == .on
+        if wanted && !LoginItem.isInstalledProperly {
+            sender.state = .off
+            note("Move VIGIL to your Applications folder first. Registering a copy "
+                 + "that lives elsewhere works until that folder is cleaned.")
+            return
+        }
+        if let why = LoginItem.set(wanted) {
+            sender.state = wanted ? .off : .on
+            note("Could not change that: \(why)")
+            return
+        }
+        switch LoginItem.state {
+        case .needsApproval:
+            note("Registered. macOS wants you to approve it in System Settings › "
+                 + "General › Login Items.")
+        case .on:
+            note("VIGIL will stand at login, and attach itself when EVE appears.")
+        default:
+            note("VIGIL will no longer start at login.")
+        }
     }
 
     @objc private func setCapture(_ sender: NSPopUpButton) {

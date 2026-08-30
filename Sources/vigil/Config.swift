@@ -23,7 +23,9 @@ struct Config {
     var length: Double = Settings.length
     var capGB: Double = Settings.capGB
     var overlaySample: URL?      // --overlay-sample <dir>: render the states
-    var selfTest = false         // --selftest: exercise ring -> clip -> file
+    var selfTest = false
+    var recoveryTest = false     // --selftest-recover: force a reattach and check
+    var loginCommand: String?    // --login on | off | status         // --selftest: exercise ring -> clip -> file
     var windowsOnly = false      // --windows: what ScreenCaptureKit can see
     var listOnly = false         // --list: dump the audio process list
     var checkOnly = false        // --check: prove the tap alone, no video
@@ -76,6 +78,10 @@ struct Config {
                 if let v = next(), let d = Double(v) { c.capGB = max(0.5, min(24, d)) }
             case "--overlay-sample":
                 if let v = next() { c.overlaySample = URL(fileURLWithPath: (v as NSString).expandingTildeInPath) }
+            case "--login":
+                if let v = next() { c.loginCommand = v.lowercased() }
+            case "--selftest-recover":
+                c.recoveryTest = true
             case "--selftest":
                 c.selfTest = true
             case "--windows":
@@ -122,6 +128,10 @@ struct Config {
                            --audio <bundle ids> says nothing matched.
       --selftest           fill the ring, save a clip, verify the file, exit.
                            No key press needed.
+      --login on|off|status
+                           whether VIGIL stands at login (also in Standing Orders)
+      --selftest-recover   force the recovery path a display sleep or a window
+                           change would take, and check the watch comes back.
       --check              run the audio tap alone for 5 s and report signal
                            level, then exit. Use this to prove the System Audio
                            Recording grant before blaming anything else.

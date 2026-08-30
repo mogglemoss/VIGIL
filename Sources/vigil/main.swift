@@ -73,6 +73,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             Log.good("overlay states and the about screen written to \(directory.path)")
             exit(0)
         }
+        if let command = config.loginCommand { loginItem(command); return }
         if config.windowsOnly { await listWindows(); return }
         if config.listOnly { listAudioProcesses(); return }
         if config.checkOnly { await checkAudioOnly(); return }
@@ -123,6 +124,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             startTicker()
             await attachOrWait()
             if config.selfTest { Task { await self.runSelfTest() } }
+            if config.recoveryTest { Task { await self.runRecoveryTest() } }
 
         } catch {
             Notify.fatal("VIGIL could not stand the watch", remedy(for: error))
@@ -378,6 +380,59 @@ final class Controller: NSObject, NSApplicationDelegate {
         return "clip-\(formatter.string(from: Date())).mp4"
     }
 
+    /// --selftest-recover. Display sleep, a resolution change and a window
+    /// going away all land in the same place: the stream stops and the watch has
+    /// to rebuild itself. That path was designed for and never once run, which
+    /// is a guess rather than a feature. This runs it deliberately.
+    func runRecoveryTest() async {
+        try? await Task.sleep(nanoseconds: 7_000_000_000)
+        guard videoAttached else {
+            Log.fail("recovery test: never attached in the first place")
+            finish(); return
+        }
+        let heldBefore = ring.heldSeconds
+        let framesBefore = stats.framesWritten
+        let breaksBefore = ring.segmentBreaks
+        Log.info(String(format: "recovery test: %.0f s held, forcing the watch to rebuild",
+                        heldBefore))
+
+        await reattach()
+        try? await Task.sleep(nanoseconds: 7_000_000_000)
+
+        let framesAfter = stats.framesWritten
+        let heldAfter = ring.heldSeconds
+        let recovered = videoAttached && framesAfter > framesBefore
+
+        // And the real question: can a clip still be filed afterwards?
+        startClip()
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        await stopClip()
+        let clips = (try? FileManager.default.contentsOfDirectory(at: outputDirectory,
+                                                                  includingPropertiesForKeys: nil))?
+            .filter { $0.pathExtension == "mp4" }.sorted { $0.path > $1.path } ?? []
+        var seconds = 0.0, tracks = 0
+        if let newest = clips.first {
+            let asset = AVURLAsset(url: newest)
+            let loaded = (try? await asset.load(.tracks)) ?? []
+            tracks = loaded.count
+            for track in loaded where track.mediaType == .video {
+                seconds = (try? await track.load(.timeRange).duration).map(CMTimeGetSeconds) ?? 0
+            }
+        }
+
+        Log.raw("""
+
+        ┌─ recovery ──────────────────────────────────────────────────────
+        │ before     \(String(format: "%.0f", heldBefore)) s held · \(framesBefore) frames · \(breaksBefore) segment breaks
+        │ after      \(String(format: "%.0f", heldAfter)) s held · \(framesAfter) frames · \(ring.segmentBreaks) segment breaks
+        │ capture    \(recovered ? "✓ came back on its own" : "✗ did not recover")
+        │ filing     \(tracks == 2 && seconds > 1 ? "✓ a clip still files afterwards" : "✗ could not file a clip after recovery") (\(tracks) tracks, \(String(format: "%.1f", seconds)) s)
+        │ audio      \(stats.everHeardSound ? "✓ still carrying signal" : "· silent (nothing was playing)")
+        └─────────────────────────────────────────────────────────────────
+        """)
+        finish()
+    }
+
     /// --selftest. Fills the ring, saves a clip, and checks the file that came
     /// out — the whole path, without needing anyone to press a key.
     func runSelfTest() async {
@@ -482,7 +537,8 @@ final class Controller: NSObject, NSApplicationDelegate {
                            Log.stamp, state,
                            Double(ring.bytes) / 1_073_741_824,
                            rolled.fps, self.stats.framesSkippedNotComplete,
-                           audioColumn, self.stats.lastDriftSeconds * 1000))
+                           audioColumn, self.stats.lastDriftSeconds * 1000)
+                    + (self.stats.sparse ? "  (frames sparse)" : ""))
 
             if self.stats.audioBuffers > 0 && !self.stats.everHeardSound
                 && Date().timeIntervalSince(self.startedAt) > 8 {
@@ -555,6 +611,34 @@ final class Controller: NSObject, NSApplicationDelegate {
         ♪ = producing output right now. Only these can be tapped.
         EVE's client reports no bundle id — it is the one called exefile.
         """)
+        Log.raw("")
+        exit(0)
+    }
+
+    /// --login. Also in Standing Orders; here so it can be checked and scripted.
+    func loginItem(_ command: String) {
+        func describe() -> String {
+            switch LoginItem.state {
+            case .on: return "standing at login"
+            case .off: return "not standing at login"
+            case .needsApproval: return "registered, awaiting your approval in System Settings"
+            case .unavailable(let why): return "unavailable — \(why)"
+            }
+        }
+        switch command {
+        case "on", "off":
+            if command == "on" && !LoginItem.isInstalledProperly {
+                Log.warn("VIGIL is not in /Applications. Registering a copy that lives "
+                         + "elsewhere works until that folder is cleaned.")
+            }
+            if let why = LoginItem.set(command == "on") {
+                Log.fail("could not change it: \(why)")
+                exit(1)
+            }
+            Log.good(describe())
+        default:
+            Log.info(describe())
+        }
         Log.raw("")
         exit(0)
     }

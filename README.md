@@ -49,6 +49,12 @@ rare case you want the screen, and says what it is doing.
 
 **Audio is chosen separately from video.** ScreenCaptureKit couples audio selection to video framing, so "the whole display, but only EVE and Discord" is unreachable through it. VIGIL uses a Core Audio process tap instead, which decouples the two: capture the display, and take audio from the game alone, from the game and your comms, or from everything the machine is playing. Fleet footage without comms is usually footage of the wrong thing.
 
+**It can be standing before EVE is.** Turn on *Stand at login* in Standing
+Orders and VIGIL is there from the moment you log in, idle and holding nothing,
+watching for the game's window. It attaches when EVE appears and lets go when it
+leaves. That is what "starts when EVE starts" actually means here — waiting
+costs nothing, and nothing else has to be timed.
+
 **The record survives EVE quitting.** Dropping to character select kills the client's audio process, and nothing reports it — the tap keeps delivering, it just stops carrying the game. VIGIL watches the audio process list and rebuilds the tap when the client returns. Discord restarting is handled the same way.
 
 **It tells you it heard you.** In fullscreen there is no menu bar to glance at, so the office stamps: a panel at the foot of the screen carrying the seal, the state, and how far back the record reaches. A drawer catches when the record opens; rubber meets paper when it is filed. Both under 160 milliseconds, and neither ever appears in a clip — VIGIL excludes itself from its own capture.
@@ -185,6 +191,8 @@ Everything is also in the menu bar, under the office glyph: the state and how mu
 | `--out <dir>` | default `~/Movies/VIGIL` |
 | `--list` | every process Core Audio can see |
 | `--windows` | every window ScreenCaptureKit can see |
+| `--login on \| off \| status` | whether VIGIL stands at login |
+| `--selftest-recover` | force the recovery path and check the watch comes back |
 | `--check` | run the tap alone for 5 s and report signal |
 | `--selftest` | fill the ring, file a record, verify the file, exit |
 | `--overlay-sample <dir>` | render the stationery to PNG |
@@ -222,6 +230,9 @@ typing in local.
 | Audio | Core Audio process tap · private aggregate device · PCM in the ring |
 | Audio timing | Device nominal rate, not the tap's · gaps paid for in silence |
 | Relaunch | Process-list listener · 600 ms coalesce · rebuild on a real change |
+| Audio route | Rebuilds when the default output device moves — headphones, a waking display |
+| Recovery | Stream stop, window change or display sleep all rebuild the watch; `--selftest-recover` runs that path deliberately |
+| Login | `SMAppService`, so it appears in System Settings › General › Login Items |
 | Hotkeys | Carbon `RegisterEventHotKey` · rebindable · no Accessibility grant · fullscreen-safe |
 | Settings | `UserDefaults` · flags override for one run without persisting |
 | Icon | Seal at 128 and above; the glyph alone below, where the ring text turns to mud |

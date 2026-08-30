@@ -29,6 +29,7 @@ final class Stats {
     var lastAudioPTS: CMTime = .invalid
 
     var markers: [(String, CMTime)] = []
+    private(set) var sparse = false
 
     func countVideoFrame() {
         lock.lock(); framesWritten += 1; framesThisSecond += 1; lock.unlock()
@@ -50,9 +51,16 @@ final class Stats {
         lock.lock(); lastAudioPTS = .invalid; lock.unlock()
     }
 
+    /// With the game in the background ScreenCaptureKit delivers a couple of
+    /// frames a second, and the newest video timestamp is then most of a second
+    /// old by construction. Comparing audio against it measures the frame gap,
+    /// not the synchronisation — so do not, and do not let it into the maximum.
     func noteDrift() {
         lock.lock(); defer { lock.unlock() }
         guard lastVideoPTS.isValid, lastAudioPTS.isValid else { return }
+        let age = CMTimeGetSeconds(CMTimeSubtract(lastAudioPTS, lastVideoPTS))
+        guard abs(age) < 0.4 else { sparse = true; return }
+        sparse = false
         let d = CMTimeGetSeconds(CMTimeSubtract(lastAudioPTS, lastVideoPTS))
         guard d.isFinite else { return }
         lastDriftSeconds = d
