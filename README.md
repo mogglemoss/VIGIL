@@ -55,7 +55,11 @@ THE MINISTRY IS MERELY NOTING.
 
 ## Installation
 
-No prebuilt binaries yet — VIGIL is signed for development, not distribution, so a Gatekeeper wall stands between it and anyone else's Mac until it is notarised.
+Build it yourself. VIGIL is signed for development, not distribution: it is not
+notarised, so Gatekeeper will refuse a copy that arrives from anywhere other
+than your own compiler. That is a deliberate deferral rather than an oversight —
+a Developer ID is a later problem, and building from source sidesteps it
+entirely.
 
 From source:
 
@@ -68,7 +72,19 @@ cd macobservance
 
 `bundle.sh` assembles and signs the bundle with whatever codesigning identity you hold. That signature is load-bearing: macOS keys permission grants to it, so an ad-hoc signature makes the system ask again on every rebuild.
 
-Launch the inner binary directly rather than the bundle — you want the instrument's own reporting in your terminal, and permissions still attribute to the bundle.
+Launch the inner binary directly rather than the bundle — you want the
+instrument's own reporting in your terminal, and permissions still attribute to
+the bundle.
+
+If you move the built `VIGIL.app` somewhere else and macOS refuses to open it,
+that is quarantine rather than a broken build:
+
+```
+xattr -d com.apple.quarantine /path/to/VIGIL.app
+```
+
+Never run that on software whose provenance you cannot vouch for. Here you
+compiled it, so you can.
 
 ---
 
