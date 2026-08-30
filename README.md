@@ -90,7 +90,9 @@ compiled it, so you can.
 
 ## Permissions
 
-Two, both refused silently in their own way.
+Two, both refused silently in their own way. VIGIL will say so on screen even
+when launched from Finder with no terminal to print to, and mirrors everything
+to `~/Library/Logs/VIGIL/vigil.log` when it has nowhere else to write.
 
 | Grant | Asked as | If refused |
 |---|---|---|
@@ -150,7 +152,7 @@ Everything is also in the menu bar, under the office glyph: the state and how mu
 | `--scale <0.25-1.0>` | capture size against native backing resolution |
 | `--codec hevc \| h264` | h264 if your editor sulks at HEVC |
 | `--fps <15-120>` | frame rate |
-| `--out <dir>` | default `~/Movies/observance` |
+| `--out <dir>` | default `~/Movies/VIGIL` |
 | `--list` | every process Core Audio can see |
 | `--check` | run the tap alone for 5 s and report signal |
 | `--selftest` | fill the ring, file a record, verify the file, exit |
@@ -236,8 +238,7 @@ Attest accordingly.
 
 ## Provenance
 
-- **Approach** — informed by reading [ReplayMac](https://github.com/picccassso/ReplayMac) to understand the problem. No code is shared; that project is source-available rather than open-source, and this is a clean-room implementation against Apple's frameworks.
-- **The seal** — the office's own, struck by the estate's render pipeline. It is lifted rather than re-rendered because its ring text is Zilla Slab on a `textPath`, and under a wider fallback SVG silently drops the characters that overrun the path. See [Resources/STRIKE.md](Resources/STRIKE.md).
+- **The seal and the icon** — the office's own, struck by [Resources/strike-icon.sh](Resources/strike-icon.sh) from the estate's artwork. See [Resources/STRIKE.md](Resources/STRIKE.md).
 - **The sounds** — synthesised from arithmetic by [Resources/strike-sounds.py](Resources/strike-sounds.py). No samples, no licences.
 - **Stationery** — the Ministry's, per `docs/stationery.md` in the estate: ink, bone, rust, sage, and Geist Mono micro-caps.
 - **Sibling instruments** — [VAGARI](https://github.com/mogglemoss/vagari) (chain custody) and [HARUSPEX](https://github.com/mogglemoss/haruspex) (proximity intelligence), from which VIGIL inherits its palette, its packaging, and its institutional temperament.

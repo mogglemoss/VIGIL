@@ -146,11 +146,40 @@ final class Controller: NSObject, NSApplicationDelegate {
             if config.selfTest { Task { await self.runSelfTest() } }
 
         } catch {
-            Log.fail(error.localizedDescription)
-            Log.raw("")
-            diagnose(error)
+            Notify.fatal("VIGIL could not stand the watch", remedy(for: error))
             exit(1)
         }
+    }
+
+    /// One message that works read in a terminal or read in a dialog.
+    func remedy(for error: Error) -> String {
+        let text = error.localizedDescription.lowercased()
+        if text.contains("processtap") || text.contains("aggregate") || text.contains("matched") {
+            return """
+            \(error.localizedDescription)
+
+            The audio tap could not be built. Most likely EVE is not running, or \
+            is running and has not played a sound yet — a process only appears to \
+            Core Audio once it has opened an output stream. Undock, or set Audio \
+            to "Everything the Mac plays" in Standing Orders.
+
+            If that is not it, System Audio Recording was refused. Grant it in \
+            System Settings › Privacy & Security, or reset the request with:
+
+                tccutil reset AudioCapture app.observance.vigil
+            """
+        }
+        return """
+        \(error.localizedDescription)
+
+        The display could not be captured. Grant Screen Recording to VIGIL in \
+        System Settings › Privacy & Security › Screen & System Audio Recording.
+
+        If you declined once already, macOS remembers and will not ask again. \
+        Reset the request with:
+
+            tccutil reset ScreenCapture app.observance.vigil
+        """
     }
 
     func installMenuBar() {
@@ -381,8 +410,22 @@ final class Controller: NSObject, NSApplicationDelegate {
 
             if self.stats.audioBuffers > 0 && !self.stats.everHeardSound
                 && Date().timeIntervalSince(self.startedAt) > 8 {
-                Log.warn("tap is delivering buffers but every sample is zero — "
-                         + "this is what a denied System Audio Recording grant looks like")
+                self.overlay.flash("Observing", stamp: "No audio heard",
+                                   tint: Overlay.Ink.blood, seconds: 3)
+                Notify.onceIfSilent("silent-tap",
+                    title: "VIGIL is recording silence",
+                    message: """
+                    The audio tap is delivering buffers and every sample in them is \
+                    zero. That is what a denied System Audio Recording grant looks \
+                    like — Core Audio reports no error for it.
+
+                    Grant it in System Settings › Privacy & Security › Screen & \
+                    System Audio Recording, or reset the request with:
+
+                        tccutil reset AudioCapture app.observance.vigil
+
+                    The watch will keep standing. Your clips will have no sound.
+                    """)
             }
         }
         timer.resume()
@@ -449,9 +492,7 @@ final class Controller: NSObject, NSApplicationDelegate {
                 self?.stats.countAudio(rms: rms)
             }
         } catch {
-            Log.fail(error.localizedDescription)
-            Log.raw("")
-            diagnose(error)
+            Notify.fatal("VIGIL could not open the tap", remedy(for: error))
             exit(1)
         }
         Log.info("tap format: \(tap.describedAs)")
@@ -484,30 +525,6 @@ final class Controller: NSObject, NSApplicationDelegate {
         }
         Log.raw("")
         exit(0)
-    }
-
-    func diagnose(_ error: Error) {
-        let text = error.localizedDescription.lowercased()
-        if text.contains("processtap") || text.contains("aggregate") || text.contains("matched") {
-            Log.raw("""
-            Audio setup failed before capture started. Most likely:
-              · EVE is not running, or is running but has not played a sound yet —
-                a process only appears in the audio process list once it opens an
-                output stream. Undock, or use --audio all. Run --list to see.
-              · System Audio Recording was refused. Rerun after:
-                    tccutil reset AudioCapture app.observance.vigil
-            """)
-        } else {
-            Log.raw("""
-            Capture setup failed. If this mentions declined or permission, grant
-            Screen Recording to VIGIL in System Settings › Privacy &
-            Security › Screen & System Audio Recording, then rerun.
-
-            If you already declined once, macOS remembers and will not ask again:
-
-                tccutil reset ScreenCapture app.observance.vigil
-            """)
-        }
     }
 
     // MARK: - Finish
@@ -553,28 +570,26 @@ Settings.registerDefaults()
 let config = Config.parse(Array(CommandLine.arguments.dropFirst()))
 
 // Diagnostics may run alongside a standing watch; a second watch may not.
+let app = NSApplication.shared
+app.setActivationPolicy(.accessory)   // no dock icon, no menu bar, no stealing focus
+
+// Diagnostics may run alongside a standing watch; a second watch may not.
 if config.listOnly == false && config.checkOnly == false && config.overlaySample == nil,
    let held = SingleInstance.claim() {
-    let who = held.pid.map { " (pid \($0))" } ?? ""
-    Log.raw("""
+    let who = held.pid.map { " (process \($0))" } ?? ""
+    Notify.fatal("A watch is already standing\(who)", """
+        Two instances both capture the display, which costs frame rate, and both \
+        claim the same chord — the second registration succeeds without complaint, \
+        so a keypress goes to whichever the window server prefers and you cannot \
+        tell which watch you struck.
 
-    A watch is already standing\(who).
+        Close the standing watch from its menu bar, or run:
 
-    Two instances both capture the display, which costs frame rate, and both
-    claim ⌥⌘S — the second registration succeeds without complaint, so a
-    keypress goes to whichever the window server prefers and you cannot tell
-    which watch you struck.
-
-    Close the standing watch from its menu bar, or:
-
-        pkill -f VIGIL
-
-    """)
+            pkill -f VIGIL
+        """)
     exit(1)
 }
 
-let app = NSApplication.shared
-app.setActivationPolicy(.accessory)   // no dock icon, no menu bar, no stealing focus
 let controller = Controller(config: config)
 app.delegate = controller
 app.run()

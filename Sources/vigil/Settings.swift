@@ -56,7 +56,7 @@ enum Settings {
                 return URL(fileURLWithPath: path)
             }
             return FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Movies/observance", isDirectory: true)
+                .appendingPathComponent("Movies/VIGIL", isDirectory: true)
         }
         set { store.set(newValue.path, forKey: Key.outputPath) }
     }
