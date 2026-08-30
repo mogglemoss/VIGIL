@@ -66,6 +66,7 @@ final class Controller: NSObject, NSApplicationDelegate {
                 self.clipLock.unlock()
             }
 
+            await overlay.prepare()
             try await video.start(config: config)
 
             let bitrate = config.bitrate ?? Int(Double(video.pixelWidth * video.pixelHeight)
@@ -244,6 +245,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         │ codec     \(config.codec == .hevc ? "hevc" : "h264")  \(String(format: "%.1f", Double(bitrate) / 1_000_000)) Mbps  ·  1 s keyframes  ·  no B-frames
         │ replay    \(Int(config.length)) s in memory  ·  ~\(String(format: "%.1f", projected)) GB at full bitrate  ·  cap \(String(format: "%g", config.capGB)) GB
         │ audio     \(audioLine)
+        │ overlay   \(video.excludedSelf ? "excluded from capture" : "NOT excluded — it will be in your clips")
         │ output    \(config.outputDir.path)
         │ hotkeys   ⌥⌘S start / stop a clip   ·   ⌥⌘Q quit
         └─────────────────────────────────────────────────────────────────

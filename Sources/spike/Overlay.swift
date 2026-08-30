@@ -10,7 +10,7 @@ import AppKit
 /// `.fullScreenAuxiliary` so it draws over a fullscreen space, and
 /// `orderFrontRegardless()` rather than `makeKeyAndOrderFront` so it never
 /// steals focus from EVE. Taking focus mid-fight would be worse than no overlay.
-final class Overlay {
+final class Overlay: @unchecked Sendable {   // only ever touched on main
     private var window: NSWindow?
     private var label: NSTextField?
     private var hideWorkItem: DispatchWorkItem?
@@ -64,6 +64,26 @@ final class Overlay {
         let size = window.frame.size
         window.setFrameOrigin(NSPoint(x: frame.midX - size.width / 2,
                                       y: frame.minY + 110))
+    }
+
+    /// Put the window on screen before ScreenCaptureKit is asked what is
+    /// shareable. An application with no on-screen window does not appear in
+    /// SCShareableContent, and an app we cannot name is an app we cannot
+    /// exclude from the capture.
+    func prepare() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async {
+                let window = self.window ?? self.build()
+                self.window = window
+                self.label?.stringValue = "● STARTING"
+                self.reposition(window)
+                window.alphaValue = 1
+                window.orderFrontRegardless()
+                continuation.resume()
+            }
+        }
+        // Give WindowServer a beat to register it before we enumerate.
+        try? await Task.sleep(nanoseconds: 250_000_000)
     }
 
     func flash(_ message: String, seconds: TimeInterval = 1.6) {

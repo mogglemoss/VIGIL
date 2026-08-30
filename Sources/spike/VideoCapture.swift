@@ -12,6 +12,7 @@ final class VideoCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     private(set) var pixelWidth = 0
     private(set) var pixelHeight = 0
     private(set) var displayDescription = ""
+    private(set) var excludedSelf = false
 
     var onFrame: ((CMSampleBuffer) -> Void)?
     var onSkippedIncomplete: (() -> Void)?
@@ -24,7 +25,22 @@ final class VideoCapture: NSObject, SCStreamOutput, SCStreamDelegate {
             throw SpikeError("no display available to capture")
         }
 
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        // Exclude ourselves, or every saved clip carries our own overlay into
+        // the edit. Excluding by application rather than by window covers the
+        // overlay even though it is built lazily.
+        let ourPID = ProcessInfo.processInfo.processIdentifier
+        let ours = content.applications.filter { $0.processID == ourPID }
+        let filter: SCContentFilter
+        if ours.isEmpty {
+            Log.warn("could not find this app in the shareable content list — "
+                     + "the overlay will appear in saved clips")
+            filter = SCContentFilter(display: display, excludingWindows: [])
+        } else {
+            filter = SCContentFilter(display: display,
+                                     excludingApplications: ours,
+                                     exceptingWindows: [])
+            excludedSelf = true
+        }
 
         // SCDisplay.width/height are POINTS. On a Retina panel that is half the
         // real thing — asking for display.width here quietly captures quarter

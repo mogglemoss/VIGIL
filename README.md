@@ -123,6 +123,12 @@ Neither throws. Neither logs. Both give you a file that plays.
 - **The handoff is locked.** A frame encoded between snapshotting the ring and
   the clip existing would otherwise fall into a gap and go missing from the
   middle of the save.
+- **We exclude ourselves from the capture**, or every clip would carry our own
+  overlay into the edit. This is why the overlay window is put on screen before
+  ScreenCaptureKit is asked what is shareable: an application with no on-screen
+  window does not appear in `SCShareableContent`, and an app you cannot name is
+  an app you cannot exclude. If that lookup ever fails, the preflight says so
+  rather than silently recording the HUD.
 
 ## Choices worth knowing about
 
@@ -155,10 +161,12 @@ Neither throws. Neither logs. Both give you a file that plays.
   spike; worth deciding before v1 whether you record on an external 16:9 panel.
 - No recovery from display sleep or resolution change. v1 needs it, and it is
   why the ring has to be a list of segments rather than one buffer.
-- **The overlay is captured into the recording.** Deliberate here — scrubbing
-  the clip to find `◆ MARKER 3` is how you confirm a press landed. v1 must
-  exclude it, via `SCContentFilter(display:excludingApplications:)` on our own
-  process, or every saved clip carries our HUD into the edit.
+- No recovery from display sleep or a resolution change. The ring is built in
+  segments ready for it, but that path has never actually run — untested
+  recovery code is a guess.
+- No relaunch watcher for EVE. Quitting to character select drops the audio tap
+  for the rest of the session, and `processRestoreEnabled` cannot help because
+  EVE has no bundle ID.
 
 ## Where this sits with CCP's rules
 
