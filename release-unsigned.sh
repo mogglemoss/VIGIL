@@ -43,6 +43,13 @@ cp Resources/seal.png Resources/stamp.wav Resources/latch.wav \
 # cp carries extended attributes, and codesign refuses a bundle wearing Finder
 # detritus. Strip them before signing rather than after being told.
 xattr -cr "$APP"
+# Prove it, rather than assume: codesign refuses FinderInfo and resource forks,
+# and its complaint names the bundle root whatever the real culprit was.
+if xattr -lr "$APP" | grep -q "com.apple.FinderInfo\|com.apple.ResourceFork"; then
+  echo "still carrying disallowed attributes after xattr -cr:"
+  xattr -lr "$APP" | grep "FinderInfo\|ResourceFork"
+  exit 1
+fi
 
 codesign --force --options runtime --sign - "$APP"
 codesign --verify --strict --verbose=1 "$APP"
