@@ -55,11 +55,11 @@ THE MINISTRY IS MERELY NOTING.
 
 ## Installation
 
-Build it yourself. VIGIL is signed for development, not distribution: it is not
-notarised, so Gatekeeper will refuse a copy that arrives from anywhere other
-than your own compiler. That is a deliberate deferral rather than an oversight —
-a Developer ID is a later problem, and building from source sidesteps it
-entirely.
+Build it yourself for now. VIGIL is not yet notarised, so Gatekeeper will refuse
+a copy that arrives from anywhere other than your own compiler. Signed releases
+are coming; [release.sh](release.sh) is the pipeline, and it needs a Developer
+ID certificate and notarisation credentials that live only in the maintainer's
+keychain.
 
 From source:
 
