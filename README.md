@@ -1,16 +1,12 @@
-# observance spike
+# observance
 
-Not the app. A throwaway that answers four questions, so we don't build the
-real thing on top of an assumption:
+A ShadowPlay-style replay recorder for EVE Online on macOS. ScreenCaptureKit →
+VideoToolbox → a segmented in-memory ring. **Nothing reaches the disk until you
+press the key.**
 
-1. Can ScreenCaptureKit pull the display at 60 fps while EVE is fullscreen,
-   without costing EVE frames?
-2. Does a Core Audio process tap actually produce non-zero samples?
-3. Do tap timestamps line up with ScreenCaptureKit frame timestamps?
-4. Does a Carbon hotkey fire while EVE holds fullscreen focus?
-
-There is no ring buffer, no menu bar, no UI. Those are v1, and they are only
-worth building if the answers here are yes.
+`⌥⌘S` opens a clip containing everything currently buffered *and keeps
+recording live* until you press it again. Video is muxed passthrough, so saving
+a minute of buffered past costs about ten milliseconds and re-encodes nothing.
 
 ## Build
 
@@ -31,7 +27,7 @@ attributes to the bundle.
 '.build/Observance Spike.app/Contents/MacOS/spike' --help
 ```
 
-**First, prove the audio grant on its own.** Play anything, then:
+**Prove the audio grant first.** Play anything, then:
 
 ```
 '.build/Observance Spike.app/Contents/MacOS/spike' --check --audio all
@@ -39,87 +35,94 @@ attributes to the bundle.
 
 A denied System Audio Recording grant is invisible — every Core Audio call
 returns `noErr` and the buffers are zeros. `--check` is the only honest test.
-If it reports `-inf`, answer the prompt, or `tccutil reset AudioCapture
-app.observance.spike` and rerun.
 
-**If nothing matches, look before guessing.**
-
-```
-'.build/Observance Spike.app/Contents/MacOS/spike' --list
-```
-
-**Then the real run.** Undock first — a process only enters the tap once it has
-opened an output stream, so a silent docked client will not be found.
+**Then run it.** Undock first: a process only enters the tap once it has opened
+an output stream, so a silent docked client will not be found. `--list` shows
+everything Core Audio can currently see.
 
 ```
-'.build/Observance Spike.app/Contents/MacOS/spike' --audio game
-'.build/Observance Spike.app/Contents/MacOS/spike' --audio EVE.app,com.hnc.Discord
-'.build/Observance Spike.app/Contents/MacOS/spike' --audio all --codec h264
+'.build/Observance Spike.app/Contents/MacOS/spike' --audio EVE.app,com.hnc.Discord --length 300
 ```
+
+`⌥⌘S` starts a clip, `⌥⌘S` again saves it, `⌥⌘Q` quits (saving anything still
+open). `⌥` is Option, not Shift. An overlay at the bottom of the screen confirms
+each one — it draws over fullscreen EVE.
+
+`--selftest` runs the whole path — fill the ring, save a clip, verify the file —
+with no key press, which is how to check a change did not break the save.
 
 ### Naming processes is harder than it looks
 
-Two things that cost an hour and will cost you another one if you forget them:
-
 - **Electron apps never play audio from their main bundle.** Discord's sound
-  comes out of `com.hnc.Discord.helper`. So bundle IDs match as prefixes.
+  comes out of `com.hnc.Discord.helper`. Bundle IDs therefore match as prefixes.
 - **EVE's client reports no bundle ID at all.** It runs as `exefile`, out of
   `…/SharedCache/tq/EVE.app`, and Core Audio has no bundle for it. So a name
   also matches an executable name or a path fragment, and `--audio game` means
-  the path fragment `EVE.app` rather than `com.ccpgames.eveonline`.
+  the path fragment `EVE.app`.
 
-That second one has a v1 consequence: `CATapDescription.processRestoreEnabled`
-saves tapped processes **by bundle ID**, so it will re-attach Discord after a
-restart and will never re-attach EVE. The real app needs its own relaunch
-watcher for the game.
-
-Go fly. Press **Option-Command-S** whenever anything happens — that is the
-hotkey reliability test, not a convenience. `⌥` is Option, not Shift.
-**Option-Command-Q** stops and prints the verdict.
-
-You should see a panel at the bottom of the screen: `● RECORDING` on start,
-`◆ MARKER n` on each press, `■ SAVED` on stop. If `● RECORDING` never appears,
-stop and say so — that is a different problem from the hotkey not firing, and
-the two are indistinguishable without it.
-
-If the overlay is invisible while EVE is fullscreen but visible on the desktop,
-EVE is using exclusive fullscreen and has the display captured. No window can
-draw above that. Switch EVE to **Windowed** in its display settings — which is
-what you want for a recorder anyway.
-
-Watch **EVE's** frame rate while this runs. That is the measurement. The numbers
-this prints only tell you whether the capture kept up, not whether it cost you
-the fight.
+That second one has a consequence: `CATapDescription.processRestoreEnabled`
+saves tapped processes **by bundle ID**, so it re-attaches Discord after a
+restart and will never re-attach EVE. A relaunch watcher for the game is still
+owed.
 
 ## Measured against a live EVE client (2026-08-30)
 
-EVE undocked, in space, sound on, Discord running.
+Native capture, 60-second ring, EVE undocked with Discord running.
 
 ```
-capture   3024×1964 @ 60   ·   1261 frames   ·   57.57 fps avg   ·   0 dropped
-audio     1885 buffers     ·   peak -29.0 dBFS ·   0 dropped
-sync      max |drift| 37.5 ms, consistently NEGATIVE
-file      2 tracks, both populated, 21.9 s video / 20.1 s audio
+capture   3024×1964 @ 60  ·  3920 frames  ·  57.5 fps  ·  0 dropped
+ring      60 s held  ·  0.05 GB  ·  0 segment breaks  ·  0 cap evictions
+clip      66.0 s (61 buffered + 5 live)  ·  59 MB  ·  muxed in 0.01 s
+          video 66.0 s / audio 66.0 s
 ```
-
-Three of the four questions answer yes. The fourth — does `⌥⌘S` fire while EVE
-holds fullscreen focus — has to be pressed by a human and is still open.
 
 Two things to watch:
 
-- **57.5, not 60.** Consistent — identical on an idle desktop and against a
-  live client, which points at `minimumFrameInterval` scheduling rather than a
-  shortfall. The number that matters is whether *EVE* drops frames, not this
-  one, and only a human watching the client can say.
-- **The bitrate ceiling was never reached.** 6 Mbps against a 28.5 Mbps target,
-  because a ship sitting in space compresses to almost nothing. A real fight
-  will run far closer to the cap — size the ring against the cap, not against
-  this measurement.
-- **The drift is a constant, not noise.** Every sample is negative, roughly
-  -20 to -37 ms — the tap's IOProc buffer and aggregate-device latency. It sits
-  inside the acceptable window so the spike passes it, but v1 should measure the
-  offset once and subtract it rather than shipping a systematic 25 ms audio lag.
-  Do not add a fudge factor before the EVE run; the number may move under load.
+- **57.5, not 60.** Consistent — identical idle and against a live client, which
+  points at `minimumFrameInterval` scheduling rather than a shortfall. Whether
+  *EVE* drops frames is a separate question only a human watching the client
+  can answer.
+- **A/V drift is a constant**, roughly ±30 ms, from the tap's IOProc and
+  aggregate-device latency. Inside the acceptable window. Worth measuring once
+  and subtracting rather than shipping a systematic offset.
+
+## Two bugs this found, both silent
+
+Recording them because both produce output that looks fine.
+
+**`kAudioTapPropertyFormat` lies about the sample rate.** It advertised 48000 Hz
+while the aggregate device ran at 44100, and the tap really delivered 44201
+frames/s. Every audio timestamp was derived 8.8% too fast, so the audio track
+came out 8.8% shorter than the video and slid steadily out of sync. The tap's
+advertised rate is nominal; once it sits in an aggregate device, **the device's
+rate wins**. Read `kAudioDevicePropertyNominalSampleRate` off the aggregate and
+believe that instead.
+
+**A tap is not gapless.** When no tapped process is producing output the tap
+delivers nothing at all. AVAssetWriter concatenates whatever it is handed, so an
+unfilled gap does not leave a hole — it drags every later sample earlier. Gaps
+have to be paid for in generated silence.
+
+Neither throws. Neither logs. Both give you a file that plays.
+
+## How the ring works
+
+- **Segments, not one buffer.** Display sleep, a resolution change, the stream
+  restarting — each produces a new `CMFormatDescription`, and frames either side
+  of that boundary cannot be concatenated without re-encoding. A clip is cut
+  from one segment; if the window spans a break the clip is short and says so.
+- **Measured in PTS, not frames.** ScreenCaptureKit only delivers on change.
+  Docked with the station spin off, EVE emits almost nothing, and a ring that
+  counted frames would quietly hold forty minutes instead of five.
+- **Trimmed to keyframes.** 1-second GOP, no B-frames. The trim keeps the last
+  keyframe that still leaves a full window behind it, so the buffer always
+  starts somewhere legal to decode from.
+- **A byte cap as well as a time window.** A five-minute window during a fight
+  is far bigger than five minutes docked, so time alone is not a memory bound.
+  At the cap, whole leading GOPs are evicted.
+- **The handoff is locked.** A frame encoded between snapshotting the ring and
+  the clip existing would otherwise fall into a gap and go missing from the
+  middle of the save.
 
 ## Choices worth knowing about
 

@@ -28,7 +28,7 @@ final class AudioTap {
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var ioProcID: AudioDeviceIOProcID?
-    private var formatDescription: CMFormatDescription?
+    private(set) var formatDescription: CMFormatDescription?
     private(set) var asbd = AudioStreamBasicDescription()
     private(set) var describedAs = ""
 
@@ -36,6 +36,18 @@ final class AudioTap {
     /// from "started but silent".
     private(set) var buffersSeen: UInt64 = 0
     private(set) var peakRMS: Float = 0
+    /// Ground truth: frames actually delivered per second of wall clock. If this
+    /// disagrees with the ASBD, the ASBD is what is wrong.
+    private(set) var framesDelivered: UInt64 = 0
+    private var firstHostTime: UInt64 = 0
+    private var lastHostTime: UInt64 = 0
+    var observedSampleRate: Double {
+        guard firstHostTime > 0, lastHostTime > firstHostTime else { return 0 }
+        let seconds = CMTimeGetSeconds(CMTimeSubtract(
+            CMClockMakeHostTimeFromSystemUnits(lastHostTime),
+            CMClockMakeHostTimeFromSystemUnits(firstHostTime)))
+        return seconds > 0 ? Double(framesDelivered) / seconds : 0
+    }
 
     private let queue = DispatchQueue(label: "app.observance.spike.tap", qos: .userInitiated)
     private var onSample: ((CMSampleBuffer, Float) -> Void)?
@@ -46,30 +58,54 @@ final class AudioTap {
         self.onSample = onSample
 
         let description = try makeTapDescription(mode)
-        var status = AudioHardwareCreateProcessTap(description, &tapID)
+        let status = AudioHardwareCreateProcessTap(description, &tapID)
         guard status == noErr, tapID != AudioObjectID(kAudioObjectUnknown) else {
             throw Failure(stage: "AudioHardwareCreateProcessTap", status: status)
         }
 
         asbd = try readTapFormat()
+        try makeAggregateDevice(tapUID: description.uuid.uuidString)
+
+        // kAudioTapPropertyFormat advertises the tap's nominal rate, not the
+        // rate it will actually be clocked at. Once the tap sits in an
+        // aggregate device, the device's rate wins — and if the machine's
+        // output is set to 44.1 kHz while the tap claims 48 kHz, every
+        // timestamp we derive is 8.8% too fast and the audio track ends up
+        // that much shorter than the video. Believe the device.
+        if let deviceRate = aggregateNominalSampleRate(), deviceRate > 0,
+           abs(deviceRate - asbd.mSampleRate) > 1 {
+            Log.warn(String(format: "tap advertises %.0f Hz but the device runs at %.0f Hz — using the device",
+                            asbd.mSampleRate, deviceRate))
+            asbd.mSampleRate = deviceRate
+        }
+
         describedAs = "\(Int(asbd.mSampleRate)) Hz, \(asbd.mChannelsPerFrame) ch, "
             + (asbd.mFormatFlags & kAudioFormatFlagIsFloat != 0 ? "float32" : "int")
             + (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0 ? ", non-interleaved" : ", interleaved")
 
         var format: CMFormatDescription?
-        status = CMAudioFormatDescriptionCreate(allocator: kCFAllocatorDefault,
-                                                asbd: &asbd,
-                                                layoutSize: 0, layout: nil,
-                                                magicCookieSize: 0, magicCookie: nil,
-                                                extensions: nil,
-                                                formatDescriptionOut: &format)
-        guard status == noErr, let format else {
-            throw Failure(stage: "CMAudioFormatDescriptionCreate", status: status)
+        let formatStatus = CMAudioFormatDescriptionCreate(allocator: kCFAllocatorDefault,
+                                                          asbd: &asbd,
+                                                          layoutSize: 0, layout: nil,
+                                                          magicCookieSize: 0, magicCookie: nil,
+                                                          extensions: nil,
+                                                          formatDescriptionOut: &format)
+        guard formatStatus == noErr, let format else {
+            throw Failure(stage: "CMAudioFormatDescriptionCreate", status: formatStatus)
         }
         formatDescription = format
 
-        try makeAggregateDevice(tapUID: description.uuid.uuidString)
         try startIOProc()
+    }
+
+    private func aggregateNominalSampleRate() -> Float64? {
+        var addr = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyNominalSampleRate,
+                                              mScope: kAudioObjectPropertyScopeGlobal,
+                                              mElement: kAudioObjectPropertyElementMain)
+        var size = UInt32(MemoryLayout<Float64>.size)
+        var rate: Float64 = 0
+        guard AudioObjectGetPropertyData(aggregateID, &addr, 0, nil, &size, &rate) == noErr else { return nil }
+        return rate
     }
 
     private func makeTapDescription(_ mode: AudioMode) throws -> CATapDescription {
@@ -207,6 +243,9 @@ final class AudioTap {
         let interleaved = asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved == 0
         let scalars = interleaved ? frames * Int(asbd.mChannelsPerFrame) : frames
         let rms = Self.rms(of: firstBuffer, scalars: scalars)
+        if firstHostTime == 0 { firstHostTime = stamp.mHostTime }
+        lastHostTime = stamp.mHostTime
+        framesDelivered &+= UInt64(frames)
         buffersSeen &+= 1
         peakRMS = max(peakRMS, rms)
         onSample?(sampleBuffer, rms)

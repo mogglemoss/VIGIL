@@ -15,6 +15,9 @@ struct Config {
     var codec: AVVideoCodecType = .hevc
     var bitrate: Int? = nil          // nil = derive from pixel rate
     var audio: AudioMode = .processes(["EVE.app"])
+    var length: Double = 300      // seconds retained in the ring
+    var capGB: Double = 8         // hard memory ceiling regardless of length
+    var selfTest = false         // --selftest: exercise ring -> clip -> file
     var listOnly = false         // --list: dump the audio process list
     var checkOnly = false        // --check: prove the tap alone, no video
     var outputDir: URL = FileManager.default.homeDirectoryForCurrentUser
@@ -56,6 +59,12 @@ struct Config {
                 }
             case "--out":
                 if let v = next() { c.outputDir = URL(fileURLWithPath: (v as NSString).expandingTildeInPath) }
+            case "--length":
+                if let v = next(), let d = Double(v) { c.length = max(10, min(1800, d)) }
+            case "--cap":
+                if let v = next(), let d = Double(v) { c.capGB = max(0.5, min(24, d)) }
+            case "--selftest":
+                c.selfTest = true
             case "--list":
                 c.listOnly = true
             case "--check":
@@ -74,6 +83,8 @@ struct Config {
     static let usage = """
     observance spike — does ScreenCaptureKit + a Core Audio process tap survive a fleet fight?
 
+      --length <10-1800>   seconds of replay held in memory (default 300)
+      --cap <GB>           hard memory ceiling for the ring (default 8)
       --scale <0.25-1.0>   capture size vs native backing resolution (default 1.0)
       --fps <15-120>       target frame rate (default 60)
       --codec hevc|h264    default hevc; h264 if your editor chokes on HEVC
@@ -88,12 +99,15 @@ struct Config {
       --list               print every process Core Audio can see, and whether
                            it is currently producing output. Start here when
                            --audio <bundle ids> says nothing matched.
+      --selftest           fill the ring, save a clip, verify the file, exit.
+                           No key press needed.
       --check              run the audio tap alone for 5 s and report signal
                            level, then exit. Use this to prove the System Audio
                            Recording grant before blaming anything else.
 
-    hotkeys (work while EVE holds fullscreen focus):
-      ⌥⌘S   drop a marker — press this whenever something happens
-      ⌥⌘Q   stop, finalise the file, print the verdict
+    hotkeys (Option-Command, and they work under fullscreen EVE):
+      ⌥⌘S   start a clip — it opens with everything in the buffer and keeps
+            recording live. Press again to stop and save it.
+      ⌥⌘Q   quit
     """
 }

@@ -21,7 +21,7 @@ final class VideoCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         let content = try await SCShareableContent.excludingDesktopWindows(false,
                                                                           onScreenWindowsOnly: true)
         guard let display = content.displays.first else {
-            throw Writer.Err("no display available to capture")
+            throw SpikeError("no display available to capture")
         }
 
         let filter = SCContentFilter(display: display, excludingWindows: [])

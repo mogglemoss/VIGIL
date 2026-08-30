@@ -52,8 +52,8 @@ final class Stats {
         maxAbsDriftSeconds = max(maxAbsDriftSeconds, abs(d))
     }
 
-    /// Roll the per-second window. Returns the line to print.
-    func tick(fileBytes: Int64) -> String {
+    /// Roll the per-second window.
+    func roll() -> (fps: Double, level: String) {
         lock.lock()
         lastSecondFPS = Double(framesThisSecond)
         framesThisSecond = 0
@@ -61,14 +61,7 @@ final class Stats {
         rmsAccumulator = 0; rmsCount = 0
         let fps = lastSecondFPS
         let rms = lastSecondRMS
-        let drift = lastDriftSeconds
-        let dropped = framesDroppedNotReady
-        let skipped = framesSkippedNotComplete
         lock.unlock()
-
-        let db = rms > 0 ? String(format: "%6.1f dBFS", 20 * log10(rms)) : "  -inf dBFS"
-        return String(format: "[%@] video %5.1f fps  drop %d  idle %d   audio %@   a/v %+.1f ms   file %.0f MB",
-                      Log.stamp, fps, dropped, skipped, db, drift * 1000,
-                      Double(fileBytes) / 1_048_576)
+        return (fps, rms > 0 ? String(format: "%6.1f dBFS", 20 * log10(rms)) : "  -inf dBFS")
     }
 }
