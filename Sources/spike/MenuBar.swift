@@ -37,7 +37,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     func install() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = Self.symbol("eye")
+        item.button?.image = MinistryMark.glyph(height: 15)
         item.button?.imagePosition = .imageLeading
         let menu = NSMenu()
         menu.delegate = self
@@ -56,13 +56,11 @@ final class MenuBar: NSObject, NSMenuDelegate {
     func refresh() {
         let state = readState()
         guard let button = statusItem?.button else { return }
-        if state.clipping {
-            button.image = Self.symbol("record.circle.fill")
-            button.title = " " + Self.clock(state.clipSeconds)
-        } else {
-            button.image = Self.symbol("eye")
-            button.title = ""
-        }
+        // The glyph stays put; the clock beside it is what changes. Swapping
+        // the mark itself would read as a different app.
+        button.image = MinistryMark.glyph(height: 15)
+        button.title = state.clipping ? " " + Self.clock(state.clipSeconds) : ""
+        button.contentTintColor = state.clipping ? Overlay.Ink.bright : nil
     }
 
     private static func clock(_ seconds: Double) -> String {

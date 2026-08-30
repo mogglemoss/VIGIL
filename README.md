@@ -122,12 +122,25 @@ Neither throws. Neither logs. Both give you a file that plays.
 
 The overlay is dressed as Ministry stationery per `docs/stationery.md` in the
 estate repo: ink ground, a hairline `--line` rule, Geist Mono micro-caps with
-0.18em tracking, and the rotated stamp lifted from the registry panel —
-`rotate(4deg)`, 1.5px border in the state's own ink.
+0.18em tracking, and **the office seal** struck at the left of the row, rotated
+−5° as the front page wears it.
 
-The stamp colour carries meaning, using the palette's own semantics:
+The detail line's colour carries meaning, using the palette's own semantics:
 `--sage` for held and filed, `--bright` while witnessing, `--fog` for nothing
 held, `--blood` for a failure.
+
+The seal cannot be re-rendered locally, and the failure is silent: its ring text
+is Zilla Slab on a `textPath`, and under any wider fallback the string overruns
+the path and SVG **drops the characters that fall off each end** without a
+warning. `rsvg-convert` with Georgia produces a seal with no ring text at all.
+So the plate is lifted from the estate's own struck wallpaper, where Playwright
+loaded the real face — see `Resources/STRIKE.md` for exactly how, and
+`Resources/seal.svg` beside it as the source of record.
+
+The **glyph** — the triangle and eye at the seal's centre — is drawn in Core
+Graphics rather than loaded, because the menu bar needs it crisp at 15pt where a
+scaled seal is mud. That is the same division the stationery makes: the seal
+goes on the document, the glyph goes on the rail.
 
 The instrument observes. It does not record.
 
@@ -139,8 +152,9 @@ The instrument observes. It does not record.
 | `FILED` | the clip's length |
 | `NOT FILED` | failed |
 
-The Ministry glyph is specified in the stationery but has no asset yet, so the
-status item wears a plain eye until one exists.
+Neither Zilla Slab nor Geist Mono is installed on this machine, so the overlay
+currently sets its micro-caps in the system monospace. Installing Geist Mono
+would make it exact; nothing else changes.
 
 ## How the ring works
 

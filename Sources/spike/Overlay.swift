@@ -11,8 +11,8 @@ import AppKit
 /// steals focus from EVE. Taking focus mid-fight would be worse than no overlay.
 ///
 /// Dressed as Ministry stationery: ink ground, a hairline rule, Geist Mono
-/// micro-caps, and the rotated stamp from the registry panel —
-/// `rotate(4deg)`, 1.5px border in the state's ink.
+/// micro-caps, and the office seal struck at the left of the row. The seal is
+/// the canonical plate, not a re-render — see `Resources/STRIKE.md`.
 final class Overlay: @unchecked Sendable {   // only ever touched on main
 
     // The house ink, from docs/stationery.md.
@@ -27,11 +27,12 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
         static let sage   = NSColor(srgbRed: 0.490, green: 0.608, blue: 0.463, alpha: 1)    // --sage
     }
 
-    private static let size = NSSize(width: 372, height: 56)
+    private static let size = NSSize(width: 408, height: 88)
+    private static let sealSize: CGFloat = 64
 
     private var window: NSWindow?
     private var label: NSTextField?
-    private var stamp: NSTextField?
+    private var detail: NSTextField?
     private var hideWorkItem: DispatchWorkItem?
 
     /// Geist Mono if the estate's face is installed, the system monospace if not.
@@ -71,21 +72,27 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
         content.layer?.borderWidth = 1
         content.layer?.borderColor = Ink.line.cgColor
 
+        // The seal, struck at the left of the row, rotated as the front page
+        // wears it.
+        if let seal = MinistryMark.seal {
+            let view = NSImageView(frame: NSRect(x: 16, y: (size.height - Self.sealSize) / 2,
+                                                 width: Self.sealSize, height: Self.sealSize))
+            view.image = seal
+            view.imageScaling = .scaleProportionallyUpOrDown
+            view.frameCenterRotation = -5
+            content.addSubview(view)
+        }
+
+        let textLeft: CGFloat = 16 + Self.sealSize + 18
         let label = NSTextField(labelWithString: "")
-        label.frame = NSRect(x: 18, y: 19, width: size.width - 150, height: 20)
+        label.frame = NSRect(x: textLeft, y: 44, width: size.width - textLeft - 16, height: 22)
         content.addSubview(label)
         self.label = label
 
-        // The registry stamp: rotate(4deg), 1.5px border in currentColor.
-        let stamp = NSTextField(labelWithString: "")
-        stamp.wantsLayer = true
-        stamp.alignment = .center
-        stamp.layer?.borderWidth = 1.5
-        stamp.layer?.cornerRadius = 3
-        stamp.frameCenterRotation = 4
-        stamp.alphaValue = 0.9
-        content.addSubview(stamp)
-        self.stamp = stamp
+        let detail = NSTextField(labelWithString: "")
+        detail.frame = NSRect(x: textLeft, y: 24, width: size.width - textLeft - 16, height: 16)
+        content.addSubview(detail)
+        self.detail = detail
 
         window.contentView = content
         return window
@@ -118,18 +125,10 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
     private func render(_ text: String, stamp stampText: String, tint: NSColor) {
         let window = self.window ?? build()
         self.window = window
-        label?.attributedStringValue = Self.microCaps(text, size: 14, tracking: 0.18,
+        label?.attributedStringValue = Self.microCaps(text, size: 15, tracking: 0.18,
                                                       color: Ink.bone)
-        if let stamp {
-            stamp.attributedStringValue = Self.microCaps(stampText, size: 9,
-                                                         tracking: 0.12, color: tint)
-            stamp.sizeToFit()
-            let width = stamp.frame.width + 12
-            stamp.frame = NSRect(x: Self.size.width - width - 18,
-                                 y: 21, width: width, height: 17)
-            stamp.frameCenterRotation = 4
-            stamp.layer?.borderColor = tint.cgColor
-        }
+        detail?.attributedStringValue = Self.microCaps(stampText, size: 9.5,
+                                                      tracking: 0.16, color: tint)
         reposition(window)
         window.alphaValue = 1
         window.orderFrontRegardless()   // never makeKeyAndOrderFront
@@ -158,6 +157,13 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
                     view.cacheDisplay(in: view.bounds, to: rep)
                     guard let png = rep.representation(using: .png, properties: [:]) else { continue }
                     try? png.write(to: directory.appendingPathComponent("\(name).png"))
+                }
+                // The menu-bar glyph too, blown up so it can be checked.
+                let glyph = MinistryMark.glyph(height: 120)
+                if let tiff = glyph.tiffRepresentation,
+                   let rep = NSBitmapImageRep(data: tiff),
+                   let png = rep.representation(using: .png, properties: [:]) {
+                    try? png.write(to: directory.appendingPathComponent("glyph.png"))
                 }
                 self.window?.orderOut(nil)
                 continuation.resume()

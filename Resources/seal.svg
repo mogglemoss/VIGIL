@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 470" width="420" height="470"
+     aria-label="Seal of the Ministry of Pantoscopic Observance">
+  <defs>
+    <path id="arcTop" d="M 62,265.9 A 162 162 0 1 1 358,265.9"></path>
+    <path id="arcBottom" d="M 59,294.3 A 178 178 0 0 0 361,294.3"></path>
+    <filter id="stamp" x="-15%" y="-15%" width="130%" height="130%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="2" seed="6" result="grain"></feTurbulence>
+      <feComponentTransfer in="grain" result="grainA">
+        <feFuncA type="discrete" tableValues="0 1 1 1 1 1 1 1"></feFuncA>
+      </feComponentTransfer>
+      <feComposite in="SourceGraphic" in2="grainA" operator="in" result="patchy"></feComposite>
+      <feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="2" result="warp"></feTurbulence>
+      <feDisplacementMap in="patchy" in2="warp" scale="2.6" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
+    </filter>
+  </defs>
+  <g filter="url(#stamp)">
+    <circle cx="210" cy="200" r="198" fill="none" stroke="#C15F3C" stroke-width="2"></circle>
+    <circle cx="210" cy="200" r="190" fill="none" stroke="#C15F3C" stroke-width="3"></circle>
+    <circle cx="210" cy="200" r="148" fill="none" stroke="#C15F3C" stroke-width="3"></circle>
+    <text font-family="'Zilla Slab', Georgia, serif" font-weight="600" font-size="23" letter-spacing="3" fill="#C15F3C">
+      <textPath href="#arcTop" startOffset="50%" text-anchor="middle">THE MINISTRY OF PANTOSCOPIC OBSERVANCE</textPath>
+    </text>
+    <text font-family="'Zilla Slab', Georgia, serif" font-weight="500" font-size="15.5" letter-spacing="2.2" fill="#C15F3C">
+      <textPath href="#arcBottom" startOffset="50%" text-anchor="middle">ACTA PUBLICA · BONUM PUBLICUM</textPath>
+    </text>
+    <path d="M 59.9,272.8 L 61.8,277.9 L 66.9,279.8 L 61.8,281.7 L 59.9,286.8 L 58,281.7 L 52.9,279.8 L 58,277.9 Z" fill="#C15F3C"></path>
+    <path d="M 360.1,272.8 L 362,277.9 L 367.1,279.8 L 362,281.7 L 360.1,286.8 L 358.2,281.7 L 353.1,279.8 L 358.2,277.9 Z" fill="#C15F3C"></path>
+    <line x1="210" y1="398" x2="210" y2="409" stroke="#C15F3C" stroke-width="5"></line>
+    <circle cx="210" cy="421" r="12" fill="#12100e" stroke="#C15F3C" stroke-width="5"></circle>
+    <g transform="translate(210,200) scale(1.12)">
+      <path d="M 0,-100 L 92,50 L -92,50 Z" fill="#C15F3C" stroke="#12100e" stroke-width="3" stroke-linejoin="round"></path>
+      <path d="M -56,8 Q 0,-56 56,8 Q 0,78.4 -56,8 Z" fill="#12100e"></path>
+      <path d="M -56,8 Q 0,-56 56,8" fill="none" stroke="#C15F3C" stroke-width="3.5" stroke-linecap="round"></path>
+      <path d="M -56,8 Q 0,78.4 56,8" fill="none" stroke="#C15F3C" stroke-width="3.5" stroke-linecap="round"></path>
+      <circle cx="0" cy="8" r="22" fill="#C15F3C"></circle>
+    </g>
+  </g>
+</svg>
