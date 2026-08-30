@@ -18,6 +18,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
         var gigabytes = Double.zero
         var clipsSaved = 0
         var audioDescription = ""
+        var audioAttached = true
         var lastClip: URL?
     }
 
@@ -83,8 +84,10 @@ final class MenuBar: NSObject, NSMenuDelegate {
             headline = "Starting"
         }
         menu.addItem(Self.disabled(headline))
-        menu.addItem(Self.disabled(String(format: "%.2f GB in memory · %@",
-                                          state.gigabytes, state.audioDescription)))
+        menu.addItem(Self.disabled(String(format: "%.2f GB in memory", state.gigabytes)))
+        menu.addItem(Self.disabled(state.audioAttached
+                                   ? "Audio · \(state.audioDescription)"
+                                   : "Audio · awaiting \(state.audioDescription)"))
         menu.addItem(.separator())
 
         let action = NSMenuItem(

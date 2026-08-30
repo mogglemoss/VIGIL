@@ -75,8 +75,39 @@ with no key press, which is how to check a change did not break the save.
 
 That second one has a consequence: `CATapDescription.processRestoreEnabled`
 saves tapped processes **by bundle ID**, so it re-attaches Discord after a
-restart and will never re-attach EVE. A relaunch watcher for the game is still
-owed.
+restart and can never re-attach EVE. So the app watches the audio process list
+itself — see below.
+
+## Surviving EVE relaunching
+
+Quitting to character select kills the client's audio process. Nothing reports
+this: the tap keeps delivering buffers, it just stops carrying the game, and
+every clip from then on is silent.
+
+So an `AudioObjectAddPropertyListenerBlock` sits on
+`kAudioHardwarePropertyProcessObjectList`. The list churns constantly — every
+helper that opens an output stream moves it — so changes are coalesced over
+600 ms and then compared against *the set we actually matched*, not the list as
+a whole. A real change tears the tap down and rebuilds it. A global tap
+(`--audio all`) follows the machine rather than a process, so it is not watched
+at all.
+
+Three things this has to get right:
+
+- **Stop accepting before stopping the device.** Core Audio hands back one more
+  buffer as the IOProc tears down, timestamped in the old session. Letting that
+  into the ring puts a half-second lie in the audio timeline, which the
+  gap-filler then dutifully pads out with silence. Measured: 503 ms of false
+  drift before the guard, 36 ms after.
+- **Drift across a rebuild is a seam, not drift.** The previous audio PTS
+  belongs to a stream that no longer exists, so the comparison is reset rather
+  than allowed to poison the metric.
+- **A rebuild can come back in a different format.** If the sample rate changed,
+  audio already buffered cannot be muxed alongside what follows, so the ring
+  drops it. Video is untouched. If a clip was open at the time, it says so.
+
+With no tap attached at all, a clip still saves — video only, and it warns
+rather than letting you find out in the edit.
 
 ## Measured against a live EVE client (2026-08-30)
 

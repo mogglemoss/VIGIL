@@ -63,6 +63,30 @@ final class Controller: NSObject, NSApplicationDelegate {
             ring = ReplayBuffer(window: config.length,
                                 byteCap: Int(config.capGB * 1_073_741_824))
 
+            tap.onFormatChange = { [weak self] in
+                self?.ring?.flushAudio()
+                if self?.clip != nil {
+                    Log.warn("a clip was open when the audio format changed — "
+                             + "its audio ends here; the video does not")
+                }
+            }
+            tap.onStateChange = { [weak self] state in
+                guard let self else { return }
+                switch state {
+                case .attached(let count):
+                    self.stats.breakAudioContinuity()
+                    self.overlay.flash("Observing", stamp: "Audio on \(count) process(es)",
+                                       tint: Overlay.Ink.sage)
+                case .waitingForProcesses:
+                    self.stats.breakAudioContinuity()
+                    self.overlay.flash("Observing", stamp: "Audio awaiting EVE",
+                                       tint: Overlay.Ink.fog)
+                case .failed(let why):
+                    self.overlay.flash("Observing", stamp: "Audio failed",
+                                       tint: Overlay.Ink.blood)
+                    Log.fail("audio: \(why)")
+                }
+            }
             try tap.start(mode: config.audio) { [weak self] sample, rms in
                 guard let self else { return }
                 self.stats.lastAudioPTS = CMSampleBufferGetPresentationTimeStamp(sample)
@@ -141,6 +165,8 @@ final class Controller: NSObject, NSApplicationDelegate {
             case .processes(let ids): state.audioDescription = ids.joined(separator: " + ")
             case .globalExcludingSelf: state.audioDescription = "all audio"
             }
+            if case .attached = self.tap.state { state.audioAttached = true }
+            else { state.audioAttached = false }
             return state
         }
         menuBar.onToggleClip = { [weak self] in self?.toggleClip() }
@@ -176,6 +202,9 @@ final class Controller: NSObject, NSApplicationDelegate {
             clipStartedAt = Date()
             clipLock.unlock()
 
+            if !writer.hasAudio {
+                Log.warn("no audio tap attached — this clip is video only")
+            }
             let from = String(format: "%.0f", snapshot.seconds)
             overlay.flash("Witnessing", stamp: "from −\(from) s",
                           tint: Overlay.Ink.bright, seconds: 2.4)
@@ -310,11 +339,17 @@ final class Controller: NSObject, NSApplicationDelegate {
             let state = self.clip == nil
                 ? String(format: "buffer %3.0f/%.0f s", ring.heldSeconds, ring.window)
                 : String(format: "CLIP   %3.0f s", Date().timeIntervalSince(self.clipStartedAt))
+            let audioColumn: String
+            switch self.tap.state {
+            case .attached:           audioColumn = rolled.level
+            case .waitingForProcesses: audioColumn = "  awaiting"
+            case .failed:             audioColumn = "    failed"
+            }
             Log.raw(String(format: "[%@] %@  %5.2f GB   %5.1f fps  idle %d   audio %@   a/v %+.0f ms",
                            Log.stamp, state,
                            Double(ring.bytes) / 1_073_741_824,
                            rolled.fps, self.stats.framesSkippedNotComplete,
-                           rolled.level, self.stats.lastDriftSeconds * 1000))
+                           audioColumn, self.stats.lastDriftSeconds * 1000))
 
             if self.stats.audioBuffers > 0 && !self.stats.everHeardSound
                 && Date().timeIntervalSince(self.startedAt) > 8 {

@@ -50,13 +50,44 @@ final class AudioTap {
     }
 
     private let queue = DispatchQueue(label: "app.observance.spike.tap", qos: .userInitiated)
+    /// Attach and detach are serialised here so a rebuild cannot race the
+    /// process-list listener that triggered it.
+    private let control = DispatchQueue(label: "app.observance.spike.tap.control")
     private var onSample: ((CMSampleBuffer, Float) -> Void)?
+
+    enum State: Equatable {
+        case attached(processes: Int)
+        case waitingForProcesses
+        case failed(String)
+    }
+
+    private(set) var state = State.waitingForProcesses
+    var onStateChange: ((State) -> Void)?
+    /// Fires when a rebuild produced a different stream format. Buffered audio
+    /// in the old format cannot be muxed alongside the new, so the ring has to
+    /// drop it.
+    var onFormatChange: (() -> Void)?
+
+    private var mode: AudioMode = .globalExcludingSelf
+    private var trackedProcesses: Set<AudioObjectID> = []
+    private var listener: AudioObjectPropertyListenerBlock?
+    private var pendingReconcile: DispatchWorkItem?
+    /// Core Audio can hand back one more buffer as the IOProc is torn down, and
+    /// its timestamp belongs to the old session. Letting that into the ring puts
+    /// a half-second lie in the audio timeline that the gap-filler then pads out
+    /// with silence. Stop accepting before we stop the device.
+    private var accepting = false
 
     // MARK: - Setup
 
     func start(mode: AudioMode, onSample: @escaping (CMSampleBuffer, Float) -> Void) throws {
         self.onSample = onSample
+        self.mode = mode
+        try attach()
+        watchProcessList()
+    }
 
+    private func attach() throws {
         let description = try makeTapDescription(mode)
         let status = AudioHardwareCreateProcessTap(description, &tapID)
         guard status == noErr, tapID != AudioObjectID(kAudioObjectUnknown) else {
@@ -96,6 +127,9 @@ final class AudioTap {
         formatDescription = format
 
         try startIOProc()
+        accepting = true
+        state = .attached(processes: trackedProcesses.count)
+        onStateChange?(state)
     }
 
     private func aggregateNominalSampleRate() -> Float64? {
@@ -127,11 +161,13 @@ final class AudioTap {
                 Log.warn("not producing audio yet, so not in the tap: \(missing.joined(separator: ", "))")
             }
             description = CATapDescription(stereoMixdownOfProcesses: found)
+            trackedProcesses = Set(found)
 
         case .globalExcludingSelf:
             // Exclude ourselves so the marker "tink" never lands in the clip.
             let (mine, _) = AudioProcesses.resolve(bundleIDs: [Bundle.main.bundleIdentifier ?? ""])
             description = CATapDescription(stereoGlobalTapButExcludeProcesses: mine)
+            trackedProcesses = []   // a global tap does not track anyone
         }
 
         description.name = "Observance Spike"
@@ -198,11 +234,102 @@ final class AudioTap {
         }
     }
 
+    // MARK: - Relaunch
+
+    /// EVE's client reports no bundle ID, so `processRestoreEnabled` — which
+    /// saves tapped processes by bundle ID — cannot bring it back. It covers
+    /// Discord and nothing else. Quitting to character select would otherwise
+    /// drop the game's audio for the rest of the session, silently: the tap
+    /// keeps delivering, it just stops carrying EVE.
+    ///
+    /// So we watch the audio process list ourselves and rebuild when the set we
+    /// actually matched changes.
+    private func watchProcessList() {
+        // A global tap follows the machine, not a process. Nothing to watch.
+        guard case .processes = mode else { return }
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyProcessObjectList,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            guard let self else { return }
+            // The process list churns constantly — every helper that opens an
+            // output stream moves it. Coalesce, then compare what we care about.
+            self.pendingReconcile?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.reconcile() }
+            self.pendingReconcile = work
+            self.control.asyncAfter(deadline: .now() + 0.6, execute: work)
+        }
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &address, control, block)
+        if status == noErr {
+            listener = block
+        } else {
+            Log.warn("could not watch the audio process list (OSStatus \(status)) — "
+                     + "EVE relaunching will drop its audio until you restart")
+        }
+    }
+
+    private func reconcile() {
+        guard case .processes(let tokens) = mode else { return }
+        let (found, _) = AudioProcesses.resolve(bundleIDs: tokens)
+        let current = Set(found)
+        guard current != trackedProcesses else { return }
+
+        let before = trackedProcesses
+        detach()
+
+        if current.isEmpty {
+            state = .waitingForProcesses
+            onStateChange?(state)
+            Log.warn("tapped process gone — waiting for \(tokens.joined(separator: ", ")) to return")
+            trackedProcesses = []
+            return
+        }
+
+        let previousRate = asbd.mSampleRate
+        do {
+            try attach()
+            if asbd.mSampleRate != previousRate && previousRate > 0 {
+                Log.warn(String(format: "stream format changed on reattach (%.0f → %.0f Hz) — "
+                                + "dropping buffered audio", previousRate, asbd.mSampleRate))
+                onFormatChange?()
+            }
+            Log.good(before.isEmpty
+                     ? "audio reattached — \(current.count) process(es) back"
+                     : "audio process set changed — tap rebuilt on \(current.count) process(es)")
+        } catch {
+            state = .failed(error.localizedDescription)
+            onStateChange?(state)
+            Log.fail("could not reattach the tap: \(error.localizedDescription)")
+        }
+    }
+
+    /// Tear down the tap but keep the listener, so a rebuild is still possible.
+    private func detach() {
+        accepting = false
+        if let ioProcID {
+            AudioDeviceStop(aggregateID, ioProcID)
+            AudioDeviceDestroyIOProcID(aggregateID, ioProcID)
+            self.ioProcID = nil
+        }
+        if aggregateID != AudioObjectID(kAudioObjectUnknown) {
+            AudioHardwareDestroyAggregateDevice(aggregateID)
+            aggregateID = AudioObjectID(kAudioObjectUnknown)
+        }
+        if tapID != AudioObjectID(kAudioObjectUnknown) {
+            AudioHardwareDestroyProcessTap(tapID)
+            tapID = AudioObjectID(kAudioObjectUnknown)
+        }
+    }
+
     // MARK: - Delivery
 
     private func handle(_ inputData: UnsafePointer<AudioBufferList>,
                         _ inputTime: UnsafePointer<AudioTimeStamp>) {
-        guard let formatDescription else { return }
+        guard accepting, let formatDescription else { return }
         let list = inputData.pointee
         guard list.mNumberBuffers > 0 else { return }
 
@@ -267,18 +394,16 @@ final class AudioTap {
     // MARK: - Teardown
 
     func stop() {
-        if let ioProcID {
-            AudioDeviceStop(aggregateID, ioProcID)
-            AudioDeviceDestroyIOProcID(aggregateID, ioProcID)
-            self.ioProcID = nil
+        pendingReconcile?.cancel()
+        if let listener {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyProcessObjectList,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain)
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject), &address, control, listener)
+            self.listener = nil
         }
-        if aggregateID != AudioObjectID(kAudioObjectUnknown) {
-            AudioHardwareDestroyAggregateDevice(aggregateID)
-            aggregateID = AudioObjectID(kAudioObjectUnknown)
-        }
-        if tapID != AudioObjectID(kAudioObjectUnknown) {
-            AudioHardwareDestroyProcessTap(tapID)
-            tapID = AudioObjectID(kAudioObjectUnknown)
-        }
+        detach()
     }
 }

@@ -13,13 +13,14 @@ import CoreMedia
 final class ClipWriter: @unchecked Sendable {   // serialised by `queue`
     private let writer: AVAssetWriter
     private let videoInput: AVAssetWriterInput
-    private let audioInput: AVAssetWriterInput
+    private let audioInput: AVAssetWriterInput?
     private let queue = DispatchQueue(label: "app.observance.spike.clip", qos: .utility)
     private var sessionStarted = false
     private var finished = false
 
     let url: URL
     let startedFrom: Double        // seconds of buffered past this clip opened with
+    var hasAudio: Bool { audioInput != nil }
     private(set) var framesWritten = 0
     private(set) var framesRejected = 0
     private(set) var audioAppended = 0
@@ -47,18 +48,27 @@ final class ClipWriter: @unchecked Sendable {   // serialised by `queue`
                                         sourceFormatHint: snapshot.format)
         videoInput.expectsMediaDataInRealTime = true
 
-        audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: audioASBD.mSampleRate,
-            AVNumberOfChannelsKey: Int(audioASBD.mChannelsPerFrame),
-            AVEncoderBitRateKey: 256_000
-        ])
-        audioInput.expectsMediaDataInRealTime = true
-
-        guard writer.canAdd(videoInput), writer.canAdd(audioInput) else {
-            throw SpikeError("writer rejected an input")
+        // No tap attached (EVE quit and has not come back) means a video-only
+        // clip. Better than refusing to save the fight.
+        if audioFormat != nil && audioASBD.mSampleRate > 0 {
+            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: audioASBD.mSampleRate,
+                AVNumberOfChannelsKey: Int(audioASBD.mChannelsPerFrame),
+                AVEncoderBitRateKey: 256_000
+            ])
+            input.expectsMediaDataInRealTime = true
+            audioInput = input
+        } else {
+            audioInput = nil
         }
-        writer.add(videoInput); writer.add(audioInput)
+
+        guard writer.canAdd(videoInput) else { throw SpikeError("writer rejected the video input") }
+        writer.add(videoInput)
+        if let audioInput {
+            guard writer.canAdd(audioInput) else { throw SpikeError("writer rejected the audio input") }
+            writer.add(audioInput)
+        }
         guard writer.startWriting() else {
             throw writer.error ?? SpikeError("startWriting() returned false")
         }
@@ -68,7 +78,9 @@ final class ClipWriter: @unchecked Sendable {   // serialised by `queue`
         queue.async { [weak self] in
             guard let self else { return }
             for frame in snapshot.video { self.write(frame.sample, to: self.videoInput) }
-            for sample in snapshot.audio { self.writeAudio(sample) }
+            if self.audioInput != nil {
+                for sample in snapshot.audio { self.writeAudio(sample) }
+            }
         }
     }
 
@@ -103,7 +115,7 @@ final class ClipWriter: @unchecked Sendable {   // serialised by `queue`
     /// later sample earlier, and audio slides ahead of video for the rest of
     /// the clip. Every gap has to be paid for in silence.
     private func writeAudio(_ sample: CMSampleBuffer) {
-        guard sessionStarted else { return }
+        guard sessionStarted, let audioInput else { return }
         let pts = CMSampleBufferGetPresentationTimeStamp(sample)
         let anchor = expectedAudioPTS.isValid ? expectedAudioPTS : sessionStart
         if anchor.isValid {
@@ -176,7 +188,7 @@ final class ClipWriter: @unchecked Sendable {   // serialised by `queue`
                             framesRejected, silenceInserted))
         }
         videoInput.markAsFinished()
-        audioInput.markAsFinished()
+        audioInput?.markAsFinished()
         await writer.finishWriting()
 
         let bytes = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int64) ?? 0

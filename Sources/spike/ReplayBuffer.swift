@@ -63,6 +63,15 @@ final class ReplayBuffer {
 
     var bytes: Int { videoBytes + audioBytes }
 
+    /// After a tap rebuild in a different stream format, the audio already
+    /// held cannot be muxed alongside what comes next. Video is untouched.
+    func flushAudio() {
+        lock.lock()
+        audio.removeAll()
+        audioBytes = 0
+        lock.unlock()
+    }
+
     /// Changing the window live is safe: shrinking takes effect on the next
     /// append, growing simply fills over time.
     func setWindow(_ seconds: Double) {

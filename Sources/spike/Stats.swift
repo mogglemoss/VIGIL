@@ -43,6 +43,13 @@ final class Stats {
         lock.unlock()
     }
 
+    /// After the tap is rebuilt, the previous audio PTS belongs to a stream
+    /// that no longer exists. Comparing across that seam measures the gap, not
+    /// the sync.
+    func breakAudioContinuity() {
+        lock.lock(); lastAudioPTS = .invalid; lock.unlock()
+    }
+
     func noteDrift() {
         lock.lock(); defer { lock.unlock() }
         guard lastVideoPTS.isValid, lastAudioPTS.isValid else { return }
