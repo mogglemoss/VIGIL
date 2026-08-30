@@ -21,6 +21,7 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
         static let line   = NSColor(srgbRed: 0.227, green: 0.208, blue: 0.188, alpha: 1)    // --line
         static let bone   = NSColor(srgbRed: 0.910, green: 0.886, blue: 0.851, alpha: 1)    // --bone
         static let fog    = NSColor(srgbRed: 0.659, green: 0.620, blue: 0.565, alpha: 1)    // --fog
+        static let dim    = NSColor(srgbRed: 0.541, green: 0.502, blue: 0.455, alpha: 1)    // --dim
         static let rust   = NSColor(srgbRed: 0.757, green: 0.373, blue: 0.235, alpha: 1)    // --rust
         static let bright = NSColor(srgbRed: 0.878, green: 0.482, blue: 0.322, alpha: 1)    // --bright
         static let blood  = NSColor(srgbRed: 0.753, green: 0.271, blue: 0.263, alpha: 1)    // --blood
@@ -115,7 +116,7 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
     func prepare() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             DispatchQueue.main.async {
-                self.render("Observance", stamp: "Starting", tint: Ink.fog)
+                self.render("Vigil", stamp: "Standing", tint: Ink.fog)
                 continuation.resume()
             }
         }

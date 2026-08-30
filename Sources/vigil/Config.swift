@@ -84,8 +84,8 @@ struct Config {
     }
 
     static let usage = """
-    observance — a replay recorder for EVE Online. The last N seconds live in
-    memory; nothing reaches the disk until you press the key.
+    VIGIL — the Ministry's standing watch. The last N seconds of your client
+    live in memory; nothing reaches the disk until you strike the record.
 
       --length <10-1800>   seconds of replay held in memory (default 300)
       --cap <GB>           hard memory ceiling for the ring (default 8)

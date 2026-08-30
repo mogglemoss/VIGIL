@@ -26,6 +26,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     var onToggleClip: () -> Void = {}
     var onSetLength: (Double) -> Void = { _ in }
     var onQuit: () -> Void = {}
+    var onAbout: () -> Void = {}
     var clipsDirectory: URL?
 
     private var statusItem: NSStatusItem?
@@ -47,7 +48,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     }
 
     private static func symbol(_ name: String) -> NSImage? {
-        let image = NSImage(systemSymbolName: name, accessibilityDescription: "Observance")
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: "VIGIL")
         image?.isTemplate = true
         return image
     }
@@ -127,7 +128,11 @@ final class MenuBar: NSObject, NSMenuDelegate {
         menu.addItem(Self.disabled("\(state.clipsSaved) filed this session"))
         menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "Quit Observance", action: #selector(quit), keyEquivalent: "q")
+        let about = NSMenuItem(title: "About VIGIL", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+
+        let quit = NSMenuItem(title: "Quit VIGIL", action: #selector(quit), keyEquivalent: "q")
         quit.keyEquivalentModifierMask = [.option, .command]
         quit.target = self
         menu.addItem(quit)
@@ -143,6 +148,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     @objc private func toggleClip() { onToggleClip() }
     @objc private func quit() { onQuit() }
+    @objc private func showAbout() { onAbout() }
     @objc private func setLength(_ sender: NSMenuItem) { onSetLength(Double(sender.tag)) }
 
     @objc private func openClips() {

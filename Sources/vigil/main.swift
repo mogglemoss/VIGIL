@@ -23,6 +23,7 @@ final class Controller: NSObject, NSApplicationDelegate {
     let encoder = Encoder()
     let overlay = Overlay()
     let menuBar = MenuBar()
+    let about = About()
     var lastClip: URL?
     var ring: ReplayBuffer!
 
@@ -52,7 +53,8 @@ final class Controller: NSObject, NSApplicationDelegate {
     func start() async {
         if let directory = config.overlaySample {
             await overlay.sample(into: directory)
-            Log.good("overlay states written to \(directory.path)")
+            await about.sample(into: directory)
+            Log.good("overlay states and the about screen written to \(directory.path)")
             exit(0)
         }
         if config.listOnly { listAudioProcesses(); return }
@@ -171,6 +173,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         }
         menuBar.onToggleClip = { [weak self] in self?.toggleClip() }
         menuBar.onQuit = { [weak self] in self?.finish() }
+        menuBar.onAbout = { [weak self] in self?.about.show() }
         menuBar.onSetLength = { [weak self] seconds in
             guard let self else { return }
             self.ring?.setWindow(seconds)
@@ -313,7 +316,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         let projected = Double(bitrate) / 8 * config.length / 1_073_741_824
         Log.raw("""
 
-        ┌─ observance ────────────────────────────────────────────────────
+        ┌─ vigil ─────────────────────────────────────────────────────────
         │ display   \(video.displayDescription)  →  capture \(video.pixelWidth)×\(video.pixelHeight) @ \(config.fps)
         │ codec     \(config.codec == .hevc ? "hevc" : "h264")  \(String(format: "%.1f", Double(bitrate) / 1_000_000)) Mbps  ·  1 s keyframes  ·  no B-frames
         │ replay    \(Int(config.length)) s in memory  ·  ~\(String(format: "%.1f", projected)) GB at full bitrate  ·  cap \(String(format: "%g", config.capGB)) GB
@@ -443,7 +446,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             Core Audio returned noErr the whole way through and handed you silence.
             That is exactly what a denied System Audio Recording grant looks like.
 
-                tccutil reset AudioCapture app.observance.witness
+                tccutil reset AudioCapture app.observance.vigil
 
             Then rerun and answer the prompt. If the prompt never appears, nothing
             was playing — a process only enters the tap once it opens an output
@@ -466,17 +469,17 @@ final class Controller: NSObject, NSApplicationDelegate {
                 a process only appears in the audio process list once it opens an
                 output stream. Undock, or use --audio all. Run --list to see.
               · System Audio Recording was refused. Rerun after:
-                    tccutil reset AudioCapture app.observance.witness
+                    tccutil reset AudioCapture app.observance.vigil
             """)
         } else {
             Log.raw("""
             Capture setup failed. If this mentions declined or permission, grant
-            Screen Recording to Observance in System Settings › Privacy &
+            Screen Recording to VIGIL in System Settings › Privacy &
             Security › Screen & System Audio Recording, then rerun.
 
             If you already declined once, macOS remembers and will not ask again:
 
-                tccutil reset ScreenCapture app.observance.witness
+                tccutil reset ScreenCapture app.observance.vigil
             """)
         }
     }
@@ -521,6 +524,28 @@ final class Controller: NSObject, NSApplicationDelegate {
 // ── entry ────────────────────────────────────────────────────────────────────
 
 let config = Config.parse(Array(CommandLine.arguments.dropFirst()))
+
+// Diagnostics may run alongside a standing watch; a second watch may not.
+if config.listOnly == false && config.checkOnly == false && config.overlaySample == nil,
+   let held = SingleInstance.claim() {
+    let who = held.pid.map { " (pid \($0))" } ?? ""
+    Log.raw("""
+
+    A watch is already standing\(who).
+
+    Two instances both capture the display, which costs frame rate, and both
+    claim ⌥⌘S — the second registration succeeds without complaint, so a
+    keypress goes to whichever the window server prefers and you cannot tell
+    which watch you struck.
+
+    Close the standing watch from its menu bar, or:
+
+        pkill -f VIGIL
+
+    """)
+    exit(1)
+}
+
 let app = NSApplication.shared
 app.setActivationPolicy(.accessory)   // no dock icon, no menu bar, no stealing focus
 let controller = Controller(config: config)

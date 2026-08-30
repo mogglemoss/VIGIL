@@ -14,7 +14,7 @@ final class ClipWriter: @unchecked Sendable {   // serialised by `queue`
     private let writer: AVAssetWriter
     private let videoInput: AVAssetWriterInput
     private let audioInput: AVAssetWriterInput?
-    private let queue = DispatchQueue(label: "app.observance.witness.clip", qos: .utility)
+    private let queue = DispatchQueue(label: "app.observance.vigil.clip", qos: .utility)
     private var sessionStarted = false
     private var finished = false
 

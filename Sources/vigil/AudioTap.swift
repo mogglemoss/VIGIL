@@ -49,10 +49,10 @@ final class AudioTap {
         return seconds > 0 ? Double(framesDelivered) / seconds : 0
     }
 
-    private let queue = DispatchQueue(label: "app.observance.witness.tap", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "app.observance.vigil.tap", qos: .userInitiated)
     /// Attach and detach are serialised here so a rebuild cannot race the
     /// process-list listener that triggered it.
-    private let control = DispatchQueue(label: "app.observance.witness.tap.control")
+    private let control = DispatchQueue(label: "app.observance.vigil.tap.control")
     private var onSample: ((CMSampleBuffer, Float) -> Void)?
 
     enum State: Equatable {
