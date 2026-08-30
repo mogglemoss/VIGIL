@@ -35,6 +35,14 @@ THE MINISTRY IS MERELY NOTING.
 
 ## What It Does
 
+**It watches the game, not the screen.** The capture target is EVE's own
+window, and nothing else on the machine is ever in the frame — not your browser,
+not your terminal, not the switch into the game. This is a privacy property
+before it is a tidy one: the ring holds several minutes at all times, and what
+it cannot see it cannot hold. If EVE is not running, VIGIL waits for it rather
+than recording whatever is there instead. `--capture display` exists for the
+rare case you want the screen, and says what it is doing.
+
 **The watch is memory, not disk.** ScreenCaptureKit feeds VideoToolbox, and the encoded frames go into a ring in RAM — five minutes by default, up to fifteen. Nothing is written until you ask. At 1440p a five-minute watch costs about a gigabyte; the ring holds a byte ceiling as well as a time window, because five minutes of a fleet fight is not five minutes of being docked.
 
 **Striking the record reaches backwards.** `⌥⌘S` opens a clip containing everything currently held **and keeps recording live** until you press it again. The buffered past is muxed passthrough — already-encoded frames, copied, never re-encoded — so a five-minute retrospective lands in about ten milliseconds. The ring trims to keyframe boundaries so what you save always begins somewhere legal to decode from.
@@ -170,11 +178,13 @@ Everything is also in the menu bar, under the office glyph: the state and how mu
 | `--length <10-1800>` | seconds held in memory (default 300) |
 | `--cap <GB>` | hard memory ceiling regardless of length (default 8) |
 | `--audio game \| all \| <names>` | who is heard |
+| `--capture game \| display` | the game's window, or the whole screen |
 | `--scale <0.25-1.0>` | capture size against native backing resolution |
 | `--codec hevc \| h264` | h264 if your editor sulks at HEVC |
 | `--fps <15-120>` | frame rate |
 | `--out <dir>` | default `~/Movies/VIGIL` |
 | `--list` | every process Core Audio can see |
+| `--windows` | every window ScreenCaptureKit can see |
 | `--check` | run the tap alone for 5 s and report signal |
 | `--selftest` | fill the ring, file a record, verify the file, exit |
 | `--overlay-sample <dir>` | render the stationery to PNG |
@@ -203,7 +213,8 @@ typing in local.
 
 | Component | Detail |
 |-----------|--------|
-| Capture | ScreenCaptureKit · display filter · self excluded · 4:2:0 full range |
+| Capture | ScreenCaptureKit · the game's window only · 4:2:0 full range |
+| Target | Waits for EVE; re-attaches when its window returns; never falls back to the display |
 | Encoding | VideoToolbox hardware HEVC or H.264 · 1 s GOP · no B-frames |
 | Ring | Segmented by format description · measured in PTS · keyframe-aligned trims |
 | Ceiling | Time window and byte cap · whole leading GOPs evicted at the cap |

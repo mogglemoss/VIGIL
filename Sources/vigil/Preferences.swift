@@ -81,7 +81,7 @@ final class ChordField: NSView {
 final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
 
     private var window: NSWindow?
-    private static let size = NSSize(width: 470, height: 474)
+    private static let size = NSSize(width: 470, height: 514)
 
     /// Applied immediately.
     var onHotKeyChanged: ((Settings.HotKey) -> Bool)?   // returns false if refused
@@ -136,6 +136,7 @@ final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
         ("Half — cheapest", 0.5)
     ]
     private static let fpsChoices: [(String, Int32)] = [("60 fps", 60), ("30 fps", 30)]
+    private static let captureChoices = ["EVE's window only", "The whole display"]
 
     func build() -> NSWindow {
         let size = Self.size
@@ -210,6 +211,12 @@ final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
                                  selected: Self.capChoices.firstIndex {
                                      abs($0.1 - Settings.capGB) < 0.01 } ?? 2,
                                  y: y, action: #selector(setCap(_:))))
+        y -= step
+
+        row("Capture", y: y, in: content)
+        content.addSubview(popup(Self.captureChoices,
+                                 selected: Settings.capturePreset == "display" ? 1 : 0,
+                                 y: y, action: #selector(setCapture(_:))))
         y -= step
 
         row("Audio", y: y, in: content)
@@ -299,6 +306,16 @@ final class Preferences: NSObject, NSWindowDelegate, @unchecked Sendable {
         }
         onRestartNeeded?()
         note("Audio changes when the watch next stands. Quit and start it again.")
+    }
+
+    @objc private func setCapture(_ sender: NSPopUpButton) {
+        let display = sender.indexOfSelectedItem == 1
+        Settings.capturePreset = display ? "display" : "game"
+        onRestartNeeded?()
+        note(display
+             ? "The whole display will be recorded — everything in front of you, "
+               + "not only EVE. Takes effect when the watch next stands."
+             : "Only EVE's window will be recorded. Takes effect when the watch next stands.")
     }
 
     @objc private func setCap(_ sender: NSPopUpButton) {

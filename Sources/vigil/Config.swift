@@ -17,10 +17,14 @@ struct Config {
     var codec: AVVideoCodecType = Settings.codec == "h264" ? .h264 : .hevc
     var bitrate: Int? = nil          // nil = derive from pixel rate
     var audio: AudioMode = Settings.audio
+    /// The game's own window by default. Capturing the display puts whatever is
+    /// in front of you into the ring, which is not what a replay recorder is for.
+    var target: CaptureTarget = Settings.captureTarget
     var length: Double = Settings.length
     var capGB: Double = Settings.capGB
     var overlaySample: URL?      // --overlay-sample <dir>: render the states
     var selfTest = false         // --selftest: exercise ring -> clip -> file
+    var windowsOnly = false      // --windows: what ScreenCaptureKit can see
     var listOnly = false         // --list: dump the audio process list
     var checkOnly = false        // --check: prove the tap alone, no video
     var outputDir: URL = Settings.outputDirectory
@@ -44,6 +48,11 @@ struct Config {
                 if let v = next() { c.codec = (v.lowercased() == "h264") ? .h264 : .hevc }
             case "--bitrate":
                 if let v = next(), let n = Int(v) { c.bitrate = n * 1_000_000 }
+            case "--capture":
+                if let v = next() {
+                    c.target = v.lowercased() == "display"
+                        ? .display : .app(names: Settings.captureNames)
+                }
             case "--audio":
                 // --audio all
                 // --audio game
@@ -69,6 +78,8 @@ struct Config {
                 if let v = next() { c.overlaySample = URL(fileURLWithPath: (v as NSString).expandingTildeInPath) }
             case "--selftest":
                 c.selfTest = true
+            case "--windows":
+                c.windowsOnly = true
             case "--list":
                 c.listOnly = true
             case "--check":
@@ -94,6 +105,11 @@ struct Config {
       --fps <15-120>       target frame rate (default 60)
       --codec hevc|h264    default hevc; h264 if your editor chokes on HEVC
       --bitrate <Mbps>     override the derived bitrate
+      --capture game|display
+                           what to record. "game" is EVE's own window and sees
+                           nothing else on the machine; "display" records the
+                           whole screen, including whatever is in front of it.
+                           default: game
       --audio <mode>       game | all | comma-separated process names
                            A name matches a bundle ID (exact or as a prefix),
                            an executable name, or a substring of the executable

@@ -18,6 +18,8 @@ enum Settings {
         static let codec = "videoCodec"
         static let scale = "captureScale"
         static let fps = "frameRate"
+        static let captureTarget = "captureTarget"   // "game" | "display"
+        static let captureNames = "captureWindowNames"
         static let audioMode = "audioMode"          // "game" | "all" | "custom"
         static let audioNames = "audioProcessNames"
         static let hotKeyCode = "recordHotKeyCode"
@@ -32,6 +34,8 @@ enum Settings {
             Key.codec: "hevc",
             Key.scale: 1.0,
             Key.fps: 60,
+            Key.captureTarget: "game",
+            Key.captureNames: ["com.ccpgames.eveonline", "EVE.app"],
             Key.audioMode: "game",
             Key.audioNames: ["EVE.app", "com.hnc.Discord"],
             Key.hotKeyCode: Int(kVK_ANSI_S),
@@ -74,6 +78,20 @@ enum Settings {
     static var fps: Int32 {
         get { let v = store.integer(forKey: Key.fps); return v > 0 ? Int32(v) : 60 }
         set { store.set(Int(max(15, min(120, newValue))), forKey: Key.fps) }
+    }
+
+    static var captureNames: [String] {
+        get { store.stringArray(forKey: Key.captureNames) ?? ["com.ccpgames.eveonline"] }
+        set { store.set(newValue, forKey: Key.captureNames) }
+    }
+
+    static var capturePreset: String {
+        get { store.string(forKey: Key.captureTarget) ?? "game" }
+        set { store.set(newValue == "display" ? "display" : "game", forKey: Key.captureTarget) }
+    }
+
+    static var captureTarget: CaptureTarget {
+        capturePreset == "display" ? .display : .app(names: captureNames)
     }
 
     static var audio: AudioMode {

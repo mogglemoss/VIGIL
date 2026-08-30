@@ -3,6 +3,7 @@ import AppKit
 import AVFoundation
 import CoreMedia
 import Carbon.HIToolbox
+import ScreenCaptureKit
 
 // ─────────────────────────────────────────────────────────────────────────────
 // observance
@@ -41,6 +42,9 @@ final class Controller: NSObject, NSApplicationDelegate {
     var startedAt = Date()
     var stopping = false
     var clipsSaved = 0
+    var videoAttached = false
+    var awaiting = false
+    var lastFrameAt = Date()
 
     init(config: Config) { self.config = config }
 
@@ -69,6 +73,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             Log.good("overlay states and the about screen written to \(directory.path)")
             exit(0)
         }
+        if config.windowsOnly { await listWindows(); return }
         if config.listOnly { listAudioProcesses(); return }
         if config.checkOnly { await checkAudioOnly(); return }
         do {
@@ -113,45 +118,10 @@ final class Controller: NSObject, NSApplicationDelegate {
             }
 
             await overlay.prepare()
-            try await video.start(config: config)
-
-            let bitrate = config.bitrate ?? Int(Double(video.pixelWidth * video.pixelHeight)
-                                                * Double(config.fps) * config.bitsPerPixel)
-            try encoder.start(width: video.pixelWidth, height: video.pixelHeight,
-                              fps: config.fps, codec: config.codec, bitrate: bitrate)
-
-            encoder.onEncoded = { [weak self] sample in
-                guard let self else { return }
-                let pts = CMSampleBufferGetPresentationTimeStamp(sample)
-                self.clipLock.lock()
-                self.ring.append(video: sample)
-                if let clip = self.clip, CMTimeCompare(pts, self.clipCutoff) > 0 {
-                    clip.append(video: sample)
-                }
-                self.clipLock.unlock()
-                self.stats.lastVideoPTS = pts
-                self.stats.countVideoFrame()
-            }
-
-            let frameDuration = CMTime(value: 1, timescale: config.fps)
-            video.onSkippedIncomplete = { [weak self] in
-                self?.stats.framesSkippedNotComplete += 1
-            }
-            video.onStop = { [weak self] error in
-                Log.fail("ScreenCaptureKit stopped: \(error.localizedDescription)")
-                self?.finish()
-            }
-            video.onFrame = { [weak self] sample in
-                guard let self, let pixels = CMSampleBufferGetImageBuffer(sample) else { return }
-                self.encoder.encode(pixels,
-                                    pts: CMSampleBufferGetPresentationTimeStamp(sample),
-                                    duration: frameDuration)
-            }
-
-            preflight(bitrate: bitrate)
-            overlay.flash("Observing", stamp: "Buffer live", seconds: 2.4)
+            preflight()
             startedAt = Date()
             startTicker()
+            await attachOrWait()
             if config.selfTest { Task { await self.runSelfTest() } }
 
         } catch {
@@ -243,6 +213,91 @@ final class Controller: NSObject, NSApplicationDelegate {
             self?.overlay.flash("Vigil", stamp: "Order filed", tint: Overlay.Ink.fog)
         }
         menuBar.install()
+    }
+
+    // MARK: - Aiming at the game
+
+    /// Keep trying until EVE's window exists. VIGIL does not fall back to the
+    /// display: recording the screen because the game is absent is exactly the
+    /// behaviour that put a Claude window in a saved clip.
+    func attachOrWait() async {
+        while !stopping {
+            do {
+                try await attachVideo()
+                awaiting = false
+                overlay.flash("Observing", stamp: "Watching \(video.displayDescription.prefix(24))",
+                              seconds: 2.4)
+                Log.good("attached to \(video.displayDescription)")
+                return
+            } catch let missing as VideoCapture.TargetMissing {
+                if !awaiting {
+                    awaiting = true
+                    Log.warn("\(missing.localizedDescription) — waiting for it to appear")
+                    overlay.flash("Observing", stamp: "Awaiting EVE", tint: Overlay.Ink.fog,
+                                  seconds: 3)
+                }
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            } catch {
+                Notify.fatal("VIGIL could not stand the watch", remedy(for: error))
+                exit(1)
+            }
+        }
+    }
+
+    func attachVideo() async throws {
+        try await video.start(config: config)
+
+        let bitrate = config.bitrate ?? Int(Double(video.pixelWidth * video.pixelHeight)
+                                            * Double(config.fps) * config.bitsPerPixel)
+        try encoder.start(width: video.pixelWidth, height: video.pixelHeight,
+                          fps: config.fps, codec: config.codec, bitrate: bitrate)
+
+        encoder.onEncoded = { [weak self] sample in
+            guard let self else { return }
+            let pts = CMSampleBufferGetPresentationTimeStamp(sample)
+            self.clipLock.lock()
+            self.ring.append(video: sample)
+            if let clip = self.clip, CMTimeCompare(pts, self.clipCutoff) > 0 {
+                clip.append(video: sample)
+            }
+            self.clipLock.unlock()
+            self.stats.lastVideoPTS = pts
+            self.stats.countVideoFrame()
+        }
+
+        let frameDuration = CMTime(value: 1, timescale: config.fps)
+        video.onSkippedIncomplete = { [weak self] in
+            self?.stats.framesSkippedNotComplete += 1
+        }
+        video.onFrame = { [weak self] sample in
+            guard let self, let pixels = CMSampleBufferGetImageBuffer(sample) else { return }
+            self.lastFrameAt = Date()
+            self.encoder.encode(pixels,
+                                pts: CMSampleBufferGetPresentationTimeStamp(sample),
+                                duration: frameDuration)
+        }
+        video.onStop = { [weak self] error in
+            Log.warn("capture stopped: \(error.localizedDescription)")
+            Task { await self?.reattach() }
+        }
+        videoAttached = true
+        lastFrameAt = Date()
+        Log.raw(String(format: "           %d×%d @ %d · %.1f Mbps",
+                       video.pixelWidth, video.pixelHeight, Int(config.fps),
+                       Double(bitrate) / 1_000_000))
+    }
+
+    /// The window went away, or changed out from under the encoder. Tear down
+    /// and start looking again; the ring keeps what it already holds, and the
+    /// new format opens a new segment.
+    func reattach() async {
+        guard videoAttached, !stopping else { return }
+        videoAttached = false
+        await video.stop()
+        encoder.stop()
+        overlay.flash("Observing", stamp: "Awaiting EVE", tint: Overlay.Ink.fog, seconds: 2.4)
+        awaiting = false
+        await attachOrWait()
     }
 
     // MARK: - Clips
@@ -368,22 +423,25 @@ final class Controller: NSObject, NSApplicationDelegate {
 
     // MARK: - Preflight
 
-    func preflight(bitrate: Int) {
+    func preflight() {
         let audioLine: String
         switch config.audio {
         case .processes(let ids): audioLine = "mixdown of \(ids.joined(separator: ", "))"
         case .globalExcludingSelf: audioLine = "everything, minus this process"
         }
-        let projected = Double(bitrate) / 8 * config.length / 1_073_741_824
+        let captureLine: String
+        switch config.target {
+        case .app(let names): captureLine = "\(names.joined(separator: ", "))  — nothing else is seen"
+        case .display: captureLine = "THE WHOLE DISPLAY — everything in front of you"
+        }
         Log.raw("""
 
         ┌─ vigil ─────────────────────────────────────────────────────────
-        │ display   \(video.displayDescription)  →  capture \(video.pixelWidth)×\(video.pixelHeight) @ \(config.fps)
-        │ codec     \(config.codec == .hevc ? "hevc" : "h264")  \(String(format: "%.1f", Double(bitrate) / 1_000_000)) Mbps  ·  1 s keyframes  ·  no B-frames
-        │ replay    \(Int(config.length)) s in memory  ·  ~\(String(format: "%.1f", projected)) GB at full bitrate  ·  cap \(String(format: "%g", config.capGB)) GB
+        │ capture   \(captureLine)
+        │ codec     \(config.codec == .hevc ? "hevc" : "h264")  ·  1 s keyframes  ·  no B-frames
+        │ replay    \(Int(config.length)) s in memory  ·  cap \(String(format: "%g", config.capGB)) GB
         │ audio     \(audioLine)
-        │ overlay   \(video.excludedSelf ? "excluded from capture" : "NOT excluded — it will be in your clips")
-        │ output    \(config.outputDir.path)
+        │ output    \(outputDirectory.path)
         │ hotkeys   \(Settings.recordHotKey.label) strike / file   ·   ⌥⌘Q quit  (also in the menu bar)
         └─────────────────────────────────────────────────────────────────
 
@@ -402,9 +460,18 @@ final class Controller: NSObject, NSApplicationDelegate {
             guard let self, !self.stopping, let ring = self.ring else { return }
             self.menuBar.refresh()
             let rolled = self.stats.roll()
-            let state = self.clip == nil
-                ? String(format: "buffer %3.0f/%.0f s", ring.heldSeconds, ring.window)
-                : String(format: "CLIP   %3.0f s", Date().timeIntervalSince(self.clipStartedAt))
+            // SCK does not always report a window disappearing as an error.
+            // Frames simply stop. Notice, and go looking again.
+            if self.videoAttached, self.clip == nil,
+               Date().timeIntervalSince(self.lastFrameAt) > 10 {
+                Log.warn("no frames for 10 s — the window is probably gone")
+                Task { await self.reattach() }
+            }
+            let state = !self.videoAttached
+                ? "awaiting EVE      "
+                : self.clip == nil
+                    ? String(format: "buffer %3.0f/%.0f s", ring.heldSeconds, ring.window)
+                    : String(format: "CLIP   %3.0f s", Date().timeIntervalSince(self.clipStartedAt))
             let audioColumn: String
             switch self.tap.state {
             case .attached:           audioColumn = rolled.level
@@ -488,6 +555,36 @@ final class Controller: NSObject, NSApplicationDelegate {
         ♪ = producing output right now. Only these can be tapped.
         EVE's client reports no bundle id — it is the one called exefile.
         """)
+        Log.raw("")
+        exit(0)
+    }
+
+    /// --windows. What ScreenCaptureKit can actually see, and under what name.
+    func listWindows() async {
+        do {
+            // onScreenWindowsOnly: false — a fullscreen game lives on its own
+            // Space, and the on-screen filter hides it entirely.
+            let content = try await SCShareableContent.excludingDesktopWindows(
+                false, onScreenWindowsOnly: false)
+            Log.raw("\n\(content.applications.count) applications\n")
+            for app in content.applications.sorted(by: { $0.applicationName < $1.applicationName }) {
+                Log.raw("  \(app.applicationName)  ·  bundle \(app.bundleIdentifier)  ·  pid \(app.processID)")
+            }
+            Log.raw("\n\(content.windows.count) windows\n")
+            for window in content.windows.sorted(by: {
+                ($0.frame.width * $0.frame.height) > ($1.frame.width * $1.frame.height) }) {
+                guard let app = window.owningApplication else { continue }
+                let size = "\(Int(window.frame.width))×\(Int(window.frame.height))"
+                let name = app.applicationName.padding(toLength: max(24, app.applicationName.count),
+                                                       withPad: " ", startingAt: 0)
+                let title = window.title ?? ""
+                Log.raw("  \(name)  \(size.padding(toLength: 12, withPad: " ", startingAt: 0))  "
+                        + "layer \(window.windowLayer)  \(title)")
+                Log.raw("     bundle \(app.bundleIdentifier)  pid \(app.processID)")
+            }
+        } catch {
+            Notify.fatal("Could not enumerate windows", remedy(for: error))
+        }
         Log.raw("")
         exit(0)
     }
@@ -583,7 +680,8 @@ let app = NSApplication.shared
 app.setActivationPolicy(.accessory)   // no dock icon, no menu bar, no stealing focus
 
 // Diagnostics may run alongside a standing watch; a second watch may not.
-if config.listOnly == false && config.checkOnly == false && config.overlaySample == nil,
+if config.listOnly == false && config.checkOnly == false
+   && config.overlaySample == nil && config.windowsOnly == false,
    let held = SingleInstance.claim() {
     let who = held.pid.map { " (process \($0))" } ?? ""
     Notify.fatal("A watch is already standing\(who)", """
