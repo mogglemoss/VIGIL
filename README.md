@@ -73,8 +73,19 @@ saves tapped processes **by bundle ID**, so it will re-attach Discord after a
 restart and will never re-attach EVE. The real app needs its own relaunch
 watcher for the game.
 
-Go fly. Press `⌥⌘S` whenever anything happens — that is the hotkey reliability
-test, not a convenience. `⌥⌘Q` stops and prints the verdict.
+Go fly. Press **Option-Command-S** whenever anything happens — that is the
+hotkey reliability test, not a convenience. `⌥` is Option, not Shift.
+**Option-Command-Q** stops and prints the verdict.
+
+You should see a panel at the bottom of the screen: `● RECORDING` on start,
+`◆ MARKER n` on each press, `■ SAVED` on stop. If `● RECORDING` never appears,
+stop and say so — that is a different problem from the hotkey not firing, and
+the two are indistinguishable without it.
+
+If the overlay is invisible while EVE is fullscreen but visible on the desktop,
+EVE is using exclusive fullscreen and has the display captured. No window can
+draw above that. Switch EVE to **Windowed** in its display settings — which is
+what you want for a recorder anyway.
 
 Watch **EVE's** frame rate while this runs. That is the measurement. The numbers
 this prints only tell you whether the capture kept up, not whether it cost you
@@ -141,6 +152,7 @@ Two things to watch:
   spike; worth deciding before v1 whether you record on an external 16:9 panel.
 - No recovery from display sleep or resolution change. v1 needs it, and it is
   why the ring has to be a list of segments rather than one buffer.
-- Audible marker feedback only (`NSSound`). v1 needs an overlay window at
-  `.screenSaver` level with `.fullScreenAuxiliary`, because in fullscreen EVE
-  the menu bar is invisible.
+- **The overlay is captured into the recording.** Deliberate here — scrubbing
+  the clip to find `◆ MARKER 3` is how you confirm a press landed. v1 must
+  exclude it, via `SCContentFilter(display:excludingApplications:)` on our own
+  process, or every saved clip carries our HUD into the edit.

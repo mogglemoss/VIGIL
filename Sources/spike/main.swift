@@ -24,6 +24,7 @@ final class Controller: NSObject, NSApplicationDelegate {
     let stats = Stats()
     let video = VideoCapture()
     let tap = AudioTap()
+    let overlay = Overlay()
     var writer: Writer?
     var ticker: DispatchSourceTimer?
     var startedAt = Date()
@@ -102,6 +103,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             }
 
             preflight(bitrate: bitrate, url: url)
+            overlay.flash("● RECORDING", seconds: 2.2)
             startedAt = Date()
             startTicker()
 
@@ -251,9 +253,11 @@ final class Controller: NSObject, NSApplicationDelegate {
             let elapsed = Date().timeIntervalSince(self.startedAt)
             self.stats.markers.append((Log.stamp, at))
             Hotkeys.confirm()
+            self.overlay.flash("◆ MARKER \(self.stats.markers.count)   \(Log.stamp)")
             Log.good("marker \(self.stats.markers.count) at \(String(format: "%.1f", elapsed)) s")
         }
         let quitOK = Hotkeys.register(id: 2, keyCode: UInt32(kVK_ANSI_Q), modifiers: mods) { [weak self] in
+            self?.overlay.flash("■ SAVED", seconds: 2.0)
             self?.finish()
         }
         if !markOK || !quitOK {
@@ -275,6 +279,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         stopping = true
         ticker?.cancel()
         Task {
+            try? await Task.sleep(nanoseconds: 400_000_000)
             await video.stop()
             tap.stop()
             await writer?.finish()
