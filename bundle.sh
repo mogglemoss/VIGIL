@@ -26,6 +26,7 @@ mkdir -p "$APP/Contents/Resources"
 cp Resources/seal.png Resources/stamp.wav Resources/latch.wav \
    Resources/AppIcon.icns "$APP/Contents/Resources/"
 
+xattr -cr "$APP"
 codesign --force --options runtime --timestamp=none \
          --sign "$IDENTITY" "$APP"
 

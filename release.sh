@@ -39,12 +39,13 @@ ZIP=".build/VIGIL-$VERSION.zip"
 
 # Stamp the version into the bundle so About and the release agree.
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(date +%Y%m%d%H%M)" Resources/Info.plist
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" Resources/Info.plist
 
 IDENTITY="$IDENTITY" ./bundle.sh
 
 # Notarisation requires a secure timestamp; bundle.sh omits one for local
 # development builds, so re-sign properly here.
+xattr -cr "$APP"
 codesign --force --options runtime --timestamp --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 

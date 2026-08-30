@@ -30,7 +30,7 @@ APP="$OUT/VIGIL.app"
 ZIP=".build/VIGIL-$VERSION-unsigned.zip"
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(date +%Y%m%d%H%M)" Resources/Info.plist
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" Resources/Info.plist
 
 swift build -c release
 
@@ -39,6 +39,10 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp .build/release/vigil "$APP/Contents/MacOS/vigil"
 cp Resources/seal.png Resources/stamp.wav Resources/latch.wav \
    Resources/AppIcon.icns "$APP/Contents/Resources/"
+
+# cp carries extended attributes, and codesign refuses a bundle wearing Finder
+# detritus. Strip them before signing rather than after being told.
+xattr -cr "$APP"
 
 codesign --force --options runtime --sign - "$APP"
 codesign --verify --strict --verbose=1 "$APP"
