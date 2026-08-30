@@ -27,6 +27,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     var onSetLength: (Double) -> Void = { _ in }
     var onQuit: () -> Void = {}
     var onAbout: () -> Void = {}
+    var onPreferences: () -> Void = {}
     var clipsDirectory: URL?
 
     private var statusItem: NSStatusItem?
@@ -93,24 +94,10 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
         let action = NSMenuItem(
             title: state.clipping ? "Stop and file the clip" : "Enter into the record",
-            action: #selector(toggleClip), keyEquivalent: "s")
-        action.keyEquivalentModifierMask = [.option, .command]
+            action: #selector(toggleClip), keyEquivalent: "")
         action.target = self
         action.isEnabled = state.observing
         menu.addItem(action)
-        menu.addItem(.separator())
-
-        let lengthItem = NSMenuItem(title: "Replay length", action: nil, keyEquivalent: "")
-        let lengths = NSMenu()
-        for (title, seconds) in Self.lengths {
-            let entry = NSMenuItem(title: title, action: #selector(setLength(_:)), keyEquivalent: "")
-            entry.target = self
-            entry.tag = Int(seconds)
-            entry.state = abs(state.windowSeconds - seconds) < 0.5 ? .on : .off
-            lengths.addItem(entry)
-        }
-        lengthItem.submenu = lengths
-        menu.addItem(lengthItem)
         menu.addItem(.separator())
 
         let reveal = NSMenuItem(title: "Open clips folder",
@@ -127,6 +114,11 @@ final class MenuBar: NSObject, NSMenuDelegate {
         }
         menu.addItem(Self.disabled("\(state.clipsSaved) filed this session"))
         menu.addItem(.separator())
+
+        let prefs = NSMenuItem(title: "Standing Orders…", action: #selector(showPreferences),
+                               keyEquivalent: ",")
+        prefs.target = self
+        menu.addItem(prefs)
 
         let about = NSMenuItem(title: "About VIGIL", action: #selector(showAbout), keyEquivalent: "")
         about.target = self
@@ -149,6 +141,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
     @objc private func toggleClip() { onToggleClip() }
     @objc private func quit() { onQuit() }
     @objc private func showAbout() { onAbout() }
+    @objc private func showPreferences() { onPreferences() }
     @objc private func setLength(_ sender: NSMenuItem) { onSetLength(Double(sender.tag)) }
 
     @objc private func openClips() {

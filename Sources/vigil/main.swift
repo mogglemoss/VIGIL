@@ -24,6 +24,8 @@ final class Controller: NSObject, NSApplicationDelegate {
     let overlay = Overlay()
     let menuBar = MenuBar()
     let about = About()
+    let preferences = Preferences()
+    lazy var outputDirectory = config.outputDir
     var lastClip: URL?
     var ring: ReplayBuffer!
 
@@ -54,6 +56,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         if let directory = config.overlaySample {
             await overlay.sample(into: directory)
             await about.sample(into: directory)
+            await preferences.sample(into: directory)
             Log.good("overlay states and the about screen written to \(directory.path)")
             exit(0)
         }
@@ -174,12 +177,32 @@ final class Controller: NSObject, NSApplicationDelegate {
         menuBar.onToggleClip = { [weak self] in self?.toggleClip() }
         menuBar.onQuit = { [weak self] in self?.finish() }
         menuBar.onAbout = { [weak self] in self?.about.show() }
+        menuBar.onPreferences = { [weak self] in self?.preferences.show() }
         menuBar.onSetLength = { [weak self] seconds in
             guard let self else { return }
             self.ring?.setWindow(seconds)
             Log.info("replay length now \(Int(seconds)) s")
             self.overlay.flash("Observing", stamp: "\(Int(seconds)) s held",
                                tint: Overlay.Ink.sage)
+        }
+        preferences.onHotKeyChanged = { [weak self] chord in
+            guard self != nil else { return false }
+            let previous = Settings.recordHotKey
+            return Hotkeys.rebind(id: 1, keyCode: chord.keyCode, modifiers: chord.modifiers,
+                                  fallbackKeyCode: previous.keyCode,
+                                  fallbackModifiers: previous.modifiers)
+        }
+        preferences.onLengthChanged = { [weak self] seconds in
+            self?.ring?.setWindow(seconds)
+            Log.info("replay length now \(Int(seconds)) s")
+        }
+        preferences.onFolderChanged = { [weak self] url in
+            self?.outputDirectory = url
+            self?.menuBar.clipsDirectory = url
+            Log.info("clips now filed to \(url.path)")
+        }
+        preferences.onRestartNeeded = { [weak self] in
+            self?.overlay.flash("Vigil", stamp: "Order filed", tint: Overlay.Ink.fog)
         }
         menuBar.install()
     }
@@ -198,7 +221,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             return
         }
         do {
-            let url = config.outputDir.appendingPathComponent(Self.filename())
+            let url = outputDirectory.appendingPathComponent(Self.filename())
             let writer = try ClipWriter(url: url, snapshot: snapshot, audioASBD: tap.asbd, audioFormat: tap.formatDescription)
             clip = writer
             clipCutoff = snapshot.cutoff
@@ -323,10 +346,10 @@ final class Controller: NSObject, NSApplicationDelegate {
         │ audio     \(audioLine)
         │ overlay   \(video.excludedSelf ? "excluded from capture" : "NOT excluded — it will be in your clips")
         │ output    \(config.outputDir.path)
-        │ hotkeys   ⌥⌘S start / stop a clip   ·   ⌥⌘Q quit  (also in the menu bar)
+        │ hotkeys   \(Settings.recordHotKey.label) strike / file   ·   ⌥⌘Q quit  (also in the menu bar)
         └─────────────────────────────────────────────────────────────────
 
-        Nothing reaches the disk until you press ⌥⌘S. That opens a clip with
+        Nothing reaches the disk until you press \(Settings.recordHotKey.label). That opens a clip with
         everything buffered and keeps recording; press it again to save.
 
         """)
@@ -369,16 +392,19 @@ final class Controller: NSObject, NSApplicationDelegate {
     // MARK: - Hotkeys
 
     func installHotkeys() {
-        let mods = UInt32(optionKey | cmdKey)
-        let clipOK = Hotkeys.register(id: 1, keyCode: UInt32(kVK_ANSI_S), modifiers: mods) { [weak self] in
+        let chord = Settings.recordHotKey
+        let clipOK = Hotkeys.register(id: 1, keyCode: chord.keyCode,
+                                      modifiers: chord.modifiers) { [weak self] in
             self?.toggleClip()
         }
-        let quitOK = Hotkeys.register(id: 2, keyCode: UInt32(kVK_ANSI_Q), modifiers: mods) { [weak self] in
+        let quitOK = Hotkeys.register(id: 2, keyCode: UInt32(kVK_ANSI_Q),
+                                      modifiers: UInt32(optionKey | cmdKey)) { [weak self] in
             self?.finish()
         }
-        if !clipOK || !quitOK {
-            Log.warn("a hotkey failed to register — something else owns ⌥⌘S or ⌥⌘Q")
+        if !clipOK {
+            Log.warn("\(chord.label) is already spoken for — rebind it in Standing Orders")
         }
+        if !quitOK { Log.warn("⌥⌘Q is already spoken for") }
         signal(SIGINT, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
         source.setEventHandler { [weak self] in self?.finish() }
@@ -514,7 +540,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         │ ring       held \(String(format: "%.0f", ring?.heldSeconds ?? 0)) s  ·  \(String(format: "%.2f", Double(ring?.bytes ?? 0) / 1_073_741_824)) GB
         │            \(ring?.segmentBreaks ?? 0) segment breaks  ·  \(ring?.cappedEvictions ?? 0) evictions at the memory cap
         │ audio      \(stats.audioBuffers) buffers  ·  max |drift| \(String(format: "%.0f", stats.maxAbsDriftSeconds * 1000)) ms
-        │ clips      \(clipsSaved) saved → \(config.outputDir.path)
+        │ clips      \(clipsSaved) saved → \(outputDirectory.path)
         └─────────────────────────────────────────────────────────────────
         """)
         Log.raw("")
@@ -523,6 +549,7 @@ final class Controller: NSObject, NSApplicationDelegate {
 
 // ── entry ────────────────────────────────────────────────────────────────────
 
+Settings.registerDefaults()
 let config = Config.parse(Array(CommandLine.arguments.dropFirst()))
 
 // Diagnostics may run alongside a standing watch; a second watch may not.

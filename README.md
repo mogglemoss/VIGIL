@@ -140,7 +140,7 @@ watch you struck. The claim is an advisory `flock`, so a crash cannot leave a
 stale lock that keeps you out. Diagnostics (`--list`, `--check`,
 `--overlay-sample`) may still be run alongside a standing watch.
 
-Everything is also in the menu bar, under the office glyph: the state and how much is held, strike and file, the replay length, the clips folder, and About. There is no dock icon and no window, so the status item is the only way to reach VIGIL without a hotkey, and the only way out of a lost terminal short of `pkill -f VIGIL`.
+Everything is also in the menu bar, under the office glyph: the state and how much is held, strike and file, the clips folder, Standing Orders, and About. There is no dock icon and no window, so the status item is the only way to reach VIGIL without a hotkey, and the only way out of a lost terminal short of `pkill -f VIGIL`.
 
 | Flag | Effect |
 |------|--------|
@@ -156,7 +156,25 @@ Everything is also in the menu bar, under the office glyph: the state and how mu
 | `--selftest` | fill the ring, file a record, verify the file, exit |
 | `--overlay-sample <dir>` | render the stationery to PNG |
 
+A flag wins for the run it is passed and is **not** written back to the standing
+orders. Otherwise trying something once would quietly become permanent.
+
 ---
+
+## Standing Orders
+
+![Standing Orders](assets/vigil-preferences.png)
+
+The chord and the clips folder are the two a pilot actually has to be able to
+override — EVE binds a great many modifier combinations, and nobody wants their
+footage in someone else's idea of the right folder. Both take effect
+immediately. Replay length, memory ceiling, audio, capture size, frame rate and
+codec are there too; those take effect when the watch next stands, because
+changing them under a running encoder means restarting the stream, and the sheet
+says so rather than pretending otherwise.
+
+A rebound chord must carry ⌘, ⌥ or ⌃. A bare key would fire while you were
+typing in local.
 
 ## Technical Specifications
 
@@ -170,7 +188,9 @@ Everything is also in the menu bar, under the office glyph: the state and how mu
 | Audio | Core Audio process tap · private aggregate device · PCM in the ring |
 | Audio timing | Device nominal rate, not the tap's · gaps paid for in silence |
 | Relaunch | Process-list listener · 600 ms coalesce · rebuild on a real change |
-| Hotkeys | Carbon `RegisterEventHotKey` · no Accessibility grant · fullscreen-safe |
+| Hotkeys | Carbon `RegisterEventHotKey` · rebindable · no Accessibility grant · fullscreen-safe |
+| Settings | `UserDefaults` · flags override for one run without persisting |
+| Icon | Seal at 128 and above; the glyph alone below, where the ring text turns to mud |
 | Measured | 3024×1964 @ 57.5 fps · 0 dropped · a/v within ±40 ms |
 | Network | None. Ever. |
 | Auth | None. There is nothing to log into. |

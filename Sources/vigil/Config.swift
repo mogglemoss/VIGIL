@@ -10,19 +10,20 @@ enum AudioMode {
 }
 
 struct Config {
-    var scale: Double = 1.0          // 1.0 = native backing resolution
-    var fps: Int32 = 60
-    var codec: AVVideoCodecType = .hevc
+    // Defaults come from the standing orders; a flag overrides for one run
+    // and is not written back.
+    var scale: Double = Settings.scale
+    var fps: Int32 = Settings.fps
+    var codec: AVVideoCodecType = Settings.codec == "h264" ? .h264 : .hevc
     var bitrate: Int? = nil          // nil = derive from pixel rate
-    var audio: AudioMode = .processes(["EVE.app"])
-    var length: Double = 300      // seconds retained in the ring
-    var capGB: Double = 8         // hard memory ceiling regardless of length
+    var audio: AudioMode = Settings.audio
+    var length: Double = Settings.length
+    var capGB: Double = Settings.capGB
     var overlaySample: URL?      // --overlay-sample <dir>: render the states
     var selfTest = false         // --selftest: exercise ring -> clip -> file
     var listOnly = false         // --list: dump the audio process list
     var checkOnly = false        // --check: prove the tap alone, no video
-    var outputDir: URL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Movies/observance", isDirectory: true)
+    var outputDir: URL = Settings.outputDirectory
 
     /// Bits per pixel per frame. Deliberately generous — this footage is
     /// source material for an editor, not a final upload.

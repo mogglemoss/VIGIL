@@ -10,7 +10,7 @@ import AppKit
 final class Hotkeys {
     private static var handlers: [UInt32: () -> Void] = [:]
     private static var installed = false
-    private static var refs: [EventHotKeyRef?] = []
+    private static var refs: [UInt32: EventHotKeyRef] = [:]
 
     static func register(id: UInt32, keyCode: UInt32, modifiers: UInt32, action: @escaping () -> Void) -> Bool {
         installEventHandlerIfNeeded()
@@ -20,9 +20,29 @@ final class Hotkeys {
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(keyCode, modifiers, hotKeyID,
                                          GetApplicationEventTarget(), 0, &ref)
-        guard status == noErr else { return false }
-        refs.append(ref)
+        guard status == noErr, let ref else { return false }
+        refs[id] = ref
         return true
+    }
+
+    /// Swap a chord at runtime. If the new one is already spoken for, the old
+    /// one is put back rather than leaving the pilot with no hotkey at all.
+    static func rebind(id: UInt32, keyCode: UInt32, modifiers: UInt32,
+                       fallbackKeyCode: UInt32, fallbackModifiers: UInt32) -> Bool {
+        let action = handlers[id]
+        unregister(id: id)
+        if let action, register(id: id, keyCode: keyCode, modifiers: modifiers, action: action) {
+            return true
+        }
+        if let action {
+            _ = register(id: id, keyCode: fallbackKeyCode,
+                         modifiers: fallbackModifiers, action: action)
+        }
+        return false
+    }
+
+    static func unregister(id: UInt32) {
+        if let ref = refs.removeValue(forKey: id) { UnregisterEventHotKey(ref) }
     }
 
     private static func installEventHandlerIfNeeded() {

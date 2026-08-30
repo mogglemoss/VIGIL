@@ -23,7 +23,8 @@ mkdir -p "$APP/Contents/MacOS"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp .build/release/vigil "$APP/Contents/MacOS/vigil"
 mkdir -p "$APP/Contents/Resources"
-cp Resources/seal.png Resources/stamp.wav Resources/latch.wav "$APP/Contents/Resources/"
+cp Resources/seal.png Resources/stamp.wav Resources/latch.wav \
+   Resources/AppIcon.icns "$APP/Contents/Resources/"
 
 codesign --force --options runtime --timestamp=none \
          --sign "$IDENTITY" "$APP"
