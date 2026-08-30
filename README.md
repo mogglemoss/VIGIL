@@ -55,13 +55,34 @@ THE MINISTRY IS MERELY NOTING.
 
 ## Installation
 
-Build it yourself for now. VIGIL is not yet notarised, so Gatekeeper will refuse
-a copy that arrives from anywhere other than your own compiler. Signed releases
-are coming; [release.sh](release.sh) is the pipeline, and it needs a Developer
-ID certificate and notarisation credentials that live only in the maintainer's
-keychain.
+### From a release
 
-From source:
+Interim builds are **ad-hoc signed, not notarised**. Two consequences, both
+worth knowing before you download rather than after:
+
+- **Gatekeeper will refuse it on first open**, and since macOS 15 a
+  Control-click no longer overrides that. Open it once, let it be refused, then
+  go to **System Settings › Privacy & Security** and press **Open Anyway**.
+  Or strip the quarantine attribute yourself:
+
+  ```
+  xattr -dr com.apple.quarantine /Applications/VIGIL.app
+  ```
+
+  Never do that to software whose provenance you cannot vouch for. Read the
+  source here, or build it yourself below, and then you can.
+
+- **Permissions must be granted again after every update.** macOS keys grants
+  to the code signature, and an ad-hoc signature is a hash of the binary, so
+  each build is a new application as far as the system is concerned. Screen
+  Recording and System Audio Recording will both ask again. A Developer ID
+  certificate fixes this permanently and is the reason
+  [release.sh](release.sh) exists; these interim builds come from
+  [release-unsigned.sh](release-unsigned.sh) until that lands.
+
+### From source
+
+Which sidesteps both of the above.
 
 ```
 git clone https://github.com/mogglemoss/VIGIL

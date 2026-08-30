@@ -2,17 +2,27 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key>          <string>app.observance.vigil</string>
-    <key>CFBundleName</key>                <string>VIGIL</string>
-    <key>CFBundleDisplayName</key>         <string>VIGIL</string>
-    <key>CFBundleExecutable</key>          <string>vigil</string>
-    <key>CFBundlePackageType</key>         <string>APPL</string>
-    <key>CFBundleShortVersionString</key>  <string>0.0.1</string>
-    <key>CFBundleVersion</key>             <string>1</string>
-    <key>CFBundleIconFile</key>            <string>AppIcon</string>
-    <key>LSMinimumSystemVersion</key>      <string>15.0</string>
-    <key>LSUIElement</key>                 <true/>
-    <key>NSAudioCaptureUsageDescription</key>
-    <string>VIGIL keeps EVE Online audio in its replay buffer, so a record you file has sound.</string>
+	<key>CFBundleDisplayName</key>
+	<string>VIGIL</string>
+	<key>CFBundleExecutable</key>
+	<string>vigil</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>app.observance.vigil</string>
+	<key>CFBundleName</key>
+	<string>VIGIL</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.1</string>
+	<key>CFBundleVersion</key>
+	<string>202608301111</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>15.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>VIGIL keeps EVE Online audio in its replay buffer, so a record you file has sound.</string>
 </dict>
 </plist>
