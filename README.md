@@ -64,8 +64,8 @@ entirely.
 From source:
 
 ```
-git clone https://github.com/mogglemoss/macobservance
-cd macobservance
+git clone https://github.com/mogglemoss/VIGIL
+cd VIGIL
 ./bundle.sh
 '.build/VIGIL.app/Contents/MacOS/vigil'
 ```
