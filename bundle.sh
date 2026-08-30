@@ -14,14 +14,14 @@ if [ -z "$IDENTITY" ]; then
   exit 1
 fi
 echo "signing as: $IDENTITY"
-APP=".build/Observance Spike.app"
+APP=".build/Observance.app"
 
 swift build -c release
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
-cp .build/release/spike "$APP/Contents/MacOS/spike"
+cp .build/release/observance "$APP/Contents/MacOS/observance"
 mkdir -p "$APP/Contents/Resources"
 cp Resources/seal.png Resources/stamp.wav Resources/latch.wav "$APP/Contents/Resources/"
 
@@ -30,7 +30,7 @@ codesign --force --options runtime --timestamp=none \
 
 echo
 echo "built: $APP"
-echo "run:   '$APP/Contents/MacOS/spike' --help"
+echo "run:   '$APP/Contents/MacOS/observance' --help"
 echo
 echo "Launch the inner binary directly, not with 'open' — you want stdout in"
 echo "your terminal, and TCC still attributes to the bundle's identity."

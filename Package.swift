@@ -5,12 +5,12 @@ import PackageDescription
 // job here, not satisfying the Swift 6 concurrency checker. v1 gets the real
 // actor boundaries.
 let package = Package(
-    name: "observance-spike",
+    name: "observance",
     platforms: [.macOS(.v15)],
     targets: [
         .executableTarget(
-            name: "spike",
-            path: "Sources/spike",
+            name: "observance",
+            path: "Sources/observance",
             swiftSettings: [.swiftLanguageMode(.v5)]
         )
     ]

@@ -22,7 +22,7 @@ struct Config {
     var listOnly = false         // --list: dump the audio process list
     var checkOnly = false        // --check: prove the tap alone, no video
     var outputDir: URL = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Movies/observance-spike", isDirectory: true)
+        .appendingPathComponent("Movies/observance", isDirectory: true)
 
     /// Bits per pixel per frame. Deliberately generous — this footage is
     /// source material for an editor, not a final upload.
@@ -84,7 +84,8 @@ struct Config {
     }
 
     static let usage = """
-    observance spike — does ScreenCaptureKit + a Core Audio process tap survive a fleet fight?
+    observance — a replay recorder for EVE Online. The last N seconds live in
+    memory; nothing reaches the disk until you press the key.
 
       --length <10-1800>   seconds of replay held in memory (default 300)
       --cap <GB>           hard memory ceiling for the ring (default 8)
@@ -98,7 +99,7 @@ struct Config {
                            path. EVE reports no bundle ID, so "game" means the
                            path fragment EVE.app.
                            default: game
-      --out <dir>          default ~/Movies/observance-spike
+      --out <dir>          default ~/Movies/observance
       --list               print every process Core Audio can see, and whether
                            it is currently producing output. Start here when
                            --audio <bundle ids> says nothing matched.

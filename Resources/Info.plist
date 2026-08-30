@@ -2,16 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key>          <string>app.observance.spike</string>
-    <key>CFBundleName</key>                <string>Observance Spike</string>
-    <key>CFBundleDisplayName</key>         <string>Observance Spike</string>
-    <key>CFBundleExecutable</key>          <string>spike</string>
+    <key>CFBundleIdentifier</key>          <string>app.observance.witness</string>
+    <key>CFBundleName</key>                <string>Observance</string>
+    <key>CFBundleDisplayName</key>         <string>Observance</string>
+    <key>CFBundleExecutable</key>          <string>observance</string>
     <key>CFBundlePackageType</key>         <string>APPL</string>
     <key>CFBundleShortVersionString</key>  <string>0.0.1</string>
     <key>CFBundleVersion</key>             <string>1</string>
     <key>LSMinimumSystemVersion</key>      <string>15.0</string>
     <key>LSUIElement</key>                 <true/>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>Observance records EVE Online audio into replay clips.</string>
+    <string>Observance keeps EVE Online audio in its replay buffer, so a clip you save has sound.</string>
 </dict>
 </plist>

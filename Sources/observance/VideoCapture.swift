@@ -7,7 +7,7 @@ import CoreMedia
 final class VideoCapture: NSObject, SCStreamOutput, SCStreamDelegate {
 
     private var stream: SCStream?
-    private let queue = DispatchQueue(label: "app.observance.spike.video", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "app.observance.witness.video", qos: .userInitiated)
 
     private(set) var pixelWidth = 0
     private(set) var pixelHeight = 0

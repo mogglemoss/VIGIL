@@ -443,7 +443,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             Core Audio returned noErr the whole way through and handed you silence.
             That is exactly what a denied System Audio Recording grant looks like.
 
-                tccutil reset AudioCapture app.observance.spike
+                tccutil reset AudioCapture app.observance.witness
 
             Then rerun and answer the prompt. If the prompt never appears, nothing
             was playing — a process only enters the tap once it opens an output
@@ -466,17 +466,17 @@ final class Controller: NSObject, NSApplicationDelegate {
                 a process only appears in the audio process list once it opens an
                 output stream. Undock, or use --audio all. Run --list to see.
               · System Audio Recording was refused. Rerun after:
-                    tccutil reset AudioCapture app.observance.spike
+                    tccutil reset AudioCapture app.observance.witness
             """)
         } else {
             Log.raw("""
             Capture setup failed. If this mentions declined or permission, grant
-            Screen Recording to Observance Spike in System Settings › Privacy &
+            Screen Recording to Observance in System Settings › Privacy &
             Security › Screen & System Audio Recording, then rerun.
 
             If you already declined once, macOS remembers and will not ask again:
 
-                tccutil reset ScreenCapture app.observance.spike
+                tccutil reset ScreenCapture app.observance.witness
             """)
         }
     }

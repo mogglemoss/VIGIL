@@ -1,8 +1,8 @@
 import Foundation
 import CoreMedia
 
-/// Everything the spike exists to measure. A spike that does not report numbers
-/// is just a toy.
+/// Everything worth measuring while running. Numbers that are never printed
+/// are numbers nobody checks.
 final class Stats {
     private let lock = NSLock()
 

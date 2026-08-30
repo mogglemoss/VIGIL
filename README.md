@@ -1,6 +1,7 @@
 # observance
 
-A ShadowPlay-style replay recorder for EVE Online on macOS. ScreenCaptureKit →
+A ShadowPlay-style replay recorder for EVE Online on macOS, for anyone playing
+it on a Mac. ScreenCaptureKit →
 VideoToolbox → a segmented in-memory ring. **Nothing reaches the disk until you
 press the key.**
 
@@ -14,7 +15,7 @@ a minute of buffered past costs about ten milliseconds and re-encodes nothing.
 ./bundle.sh
 ```
 
-Produces `.build/Observance Spike.app`, signed with your Apple Development
+Produces `.build/Observance.app`, signed with your Apple Development
 identity. That signature matters: TCC grants are keyed to it, so an ad-hoc
 signature would re-prompt on every rebuild.
 
@@ -24,13 +25,13 @@ Launch the inner binary directly, so stdout lands in your terminal. TCC still
 attributes to the bundle.
 
 ```
-'.build/Observance Spike.app/Contents/MacOS/spike' --help
+'.build/Observance.app/Contents/MacOS/observance' --help
 ```
 
 **Prove the audio grant first.** Play anything, then:
 
 ```
-'.build/Observance Spike.app/Contents/MacOS/spike' --check --audio all
+'.build/Observance.app/Contents/MacOS/observance' --check --audio all
 ```
 
 A denied System Audio Recording grant is invisible — every Core Audio call
@@ -41,7 +42,7 @@ an output stream, so a silent docked client will not be found. `--list` shows
 everything Core Audio can currently see.
 
 ```
-'.build/Observance Spike.app/Contents/MacOS/spike' --audio EVE.app,com.hnc.Discord --length 300
+'.build/Observance.app/Contents/MacOS/observance' --audio EVE.app,com.hnc.Discord --length 300
 ```
 
 `⌥⌘S` starts a clip, `⌥⌘S` again saves it, `⌥⌘Q` quits (saving anything still
@@ -55,7 +56,7 @@ makes the status item the only way to reach it without a hotkey, and the only
 way to quit if the terminal is gone. Failing that:
 
 ```bash
-pkill -f 'Observance Spike'
+pkill -f Observance
 ```
 
 `--overlay-sample <dir>` renders every overlay state to PNG, so the stationery
