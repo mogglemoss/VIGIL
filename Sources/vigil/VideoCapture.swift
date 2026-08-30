@@ -32,6 +32,45 @@ final class VideoCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     private(set) var pixelHeight = 0
     private(set) var displayDescription = ""
     private(set) var excludedSelf = false
+    /// Kept so the title can be re-read cheaply later: a pilot switches
+    /// character without the window changing, and the name in the title
+    /// changes with them.
+    private(set) var targetWindowID: CGWindowID?
+
+    /// The window's title as it reads right now, not as it read at attach.
+    ///
+    /// `.optionAll` and not `CGWindowListCreateDescriptionFromArray`: the latter
+    /// returns nothing at all for a fullscreen game, because it only sees the
+    /// current Space. The same trap as `onScreenWindowsOnly`, in a different
+    /// API, an hour apart.
+    var currentTitle: String? {
+        guard let targetWindowID else { return nil }
+        guard let all = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID)
+                as? [[String: Any]] else { return nil }
+        for window in all {
+            guard let number = window[kCGWindowNumber as String] as? CGWindowID,
+                  number == targetWindowID else { continue }
+            guard let name = window[kCGWindowName as String] as? String,
+                  !name.isEmpty else { return nil }
+            return name
+        }
+        return nil
+    }
+
+    /// EVE titles its window "EVE - Cormorant Fell". Anything after the last
+    /// separator is the pilot; a client sitting at character select has no
+    /// separator and no pilot, which is correct rather than a failure.
+    var pilotName: String? {
+        guard let title = currentTitle else { return nil }
+        for separator in [" - ", " — ", " – "] {
+            if let range = title.range(of: separator, options: .backwards) {
+                let name = String(title[range.upperBound...])
+                    .trimmingCharacters(in: .whitespaces)
+                return name.isEmpty ? nil : name
+            }
+        }
+        return nil
+    }
 
     var onFrame: ((CMSampleBuffer) -> Void)?
     var onSkippedIncomplete: (() -> Void)?
@@ -64,6 +103,7 @@ final class VideoCapture: NSObject, SCStreamOutput, SCStreamDelegate {
 
         switch target {
         case .display:
+            targetWindowID = nil
             guard let display = content.displays.first else {
                 throw SpikeError("no display available to capture")
             }
@@ -90,6 +130,7 @@ final class VideoCapture: NSObject, SCStreamOutput, SCStreamDelegate {
                 throw TargetMissing(names: names)
             }
             excludedSelf = true   // nothing but this window is in the filter
+            targetWindowID = window.windowID
             let owner = window.owningApplication?.applicationName ?? "?"
             let title = window.title.map { " · \($0)" } ?? ""
             return (SCContentFilter(desktopIndependentWindow: window), "\(owner)\(title)")

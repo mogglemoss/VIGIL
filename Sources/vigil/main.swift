@@ -316,7 +316,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             return
         }
         do {
-            let url = outputDirectory.appendingPathComponent(Self.filename())
+            let url = outputDirectory.appendingPathComponent(Self.filename(pilot: video.pilotName))
             let writer = try ClipWriter(url: url, snapshot: snapshot, audioASBD: tap.asbd, audioFormat: tap.formatDescription)
             clip = writer
             clipCutoff = snapshot.cutoff
@@ -374,10 +374,30 @@ final class Controller: NSObject, NSApplicationDelegate {
         }
     }
 
-    static func filename() -> String {
+    /// Named for when it happened and who it happened to. The pilot comes from
+    /// the client's own window title, which costs nothing and needs no log,
+    /// no API and no permission we do not already hold.
+    static func filename(pilot: String?) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd-HHmmss"
-        return "clip-\(formatter.string(from: Date())).mp4"
+        let stamp = formatter.string(from: Date())
+        guard let pilot = pilot.map(sanitised), !pilot.isEmpty else {
+            return "clip-\(stamp).mp4"
+        }
+        return "clip-\(stamp)-\(pilot).mp4"
+    }
+
+    /// A character name is chosen by its owner, not by us, and can carry
+    /// anything the game allows. Keep what reads, drop what a path cannot hold.
+    private static func sanitised(_ name: String) -> String {
+        let kept = name.unicodeScalars.map { scalar -> Character in
+            if CharacterSet.alphanumerics.contains(scalar) { return Character(scalar) }
+            if scalar == "'" || scalar == "-" { return Character(scalar) }
+            return "-"
+        }
+        return String(kept)
+            .split(separator: "-", omittingEmptySubsequences: true)
+            .joined(separator: "-")
     }
 
     /// --selftest-recover. Display sleep, a resolution change and a window

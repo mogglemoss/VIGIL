@@ -57,6 +57,13 @@ costs nothing, and nothing else has to be timed.
 
 **The record survives EVE quitting.** Dropping to character select kills the client's audio process, and nothing reports it — the tap keeps delivering, it just stops carrying the game. VIGIL watches the audio process list and rebuilds the tap when the client returns. Discord restarting is handled the same way.
 
+**Clips are named for who was flying.** `clip-2026-08-30-121601-Cormorant-Fell.mp4`.
+The pilot comes from the client's own window title, read fresh each time a
+record is struck, so multiboxing files each clip under the character that was
+actually in it. No log is read, no API is called, and no permission is needed
+beyond the one already held. At character select there is no name in the title,
+and the clip is simply not named for one.
+
 **It tells you it heard you.** In fullscreen there is no menu bar to glance at, so the office stamps: a panel at the foot of the screen carrying the seal, the state, and how far back the record reaches. A drawer catches when the record opens; rubber meets paper when it is filed. Both under 160 milliseconds, and neither ever appears in a clip — VIGIL excludes itself from its own capture.
 
 **Nothing is inferred.** VIGIL does not read the overview, watch for combat, parse a log, or decide on your behalf that something was worth keeping. This is deliberate and it is not coming: the moment an instrument derives meaning from what is on your screen, it stops being a recorder. See *Where This Sits With CCP's Rules*, below.
