@@ -23,7 +23,7 @@ mkdir -p "$APP/Contents/MacOS"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp .build/release/spike "$APP/Contents/MacOS/spike"
 mkdir -p "$APP/Contents/Resources"
-cp Resources/seal.png "$APP/Contents/Resources/seal.png"
+cp Resources/seal.png Resources/stamp.wav Resources/latch.wav "$APP/Contents/Resources/"
 
 codesign --force --options runtime --timestamp=none \
          --sign "$IDENTITY" "$APP"

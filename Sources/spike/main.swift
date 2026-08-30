@@ -205,6 +205,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             if !writer.hasAudio {
                 Log.warn("no audio tap attached — this clip is video only")
             }
+            Chime.latch.play()
             let from = String(format: "%.0f", snapshot.seconds)
             overlay.flash("Witnessing", stamp: "from −\(from) s",
                           tint: Overlay.Ink.bright, seconds: 2.4)
@@ -240,6 +241,7 @@ final class Controller: NSObject, NSApplicationDelegate {
         clipsSaved += 1
         lastClip = result.url
 
+        Chime.stamp.play()
         overlay.flash("Filed", stamp: String(format: "%.0f s", result.seconds),
                       tint: Overlay.Ink.sage, seconds: 2.6)
         Log.good(String(format: "saved %.1f s (%.0f s buffered + %.0f s live) · %.0f MB · muxed in %.2f s",
@@ -366,7 +368,6 @@ final class Controller: NSObject, NSApplicationDelegate {
     func installHotkeys() {
         let mods = UInt32(optionKey | cmdKey)
         let clipOK = Hotkeys.register(id: 1, keyCode: UInt32(kVK_ANSI_S), modifiers: mods) { [weak self] in
-            Hotkeys.confirm()
             self?.toggleClip()
         }
         let quitOK = Hotkeys.register(id: 2, keyCode: UInt32(kVK_ANSI_Q), modifiers: mods) { [weak self] in

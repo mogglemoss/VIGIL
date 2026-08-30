@@ -187,6 +187,21 @@ Neither Zilla Slab nor Geist Mono is installed on this machine, so the overlay
 currently sets its micro-caps in the system monospace. Installing Geist Mono
 would make it exact; nothing else changes.
 
+## The sounds
+
+The office does not chime. It stamps.
+
+| Cue | When | Length |
+|---|---|---|
+| `latch.wav` | the record is opened | 70 ms |
+| `stamp.wav` | the record is filed | 150 ms |
+
+A drawer catching, then rubber on paper on desk. Both are struck by
+`Resources/strike-sounds.py` from arithmetic — no samples, no licences, no
+dependencies, and the same impression every run. Neither ever reaches a clip:
+under `--audio all` the tap excludes this process, and under per-process mode we
+were never in it.
+
 ## How the ring works
 
 - **Segments, not one buffer.** Display sleep, a resolution change, the stream

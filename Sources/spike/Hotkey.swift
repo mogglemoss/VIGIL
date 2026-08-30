@@ -41,11 +41,4 @@ final class Hotkeys {
         }, 1, &spec, nil, nil)
     }
 
-    /// Audible confirmation. In a fullscreen game the menu bar is invisible, so
-    /// without feedback you press the key and have no idea whether it landed.
-    /// v1 replaces this with an overlay NSWindow at .screenSaver level with
-    /// .fullScreenAuxiliary — this is the cheap stand-in.
-    static func confirm() {
-        NSSound(named: "Tink")?.play()
-    }
 }
