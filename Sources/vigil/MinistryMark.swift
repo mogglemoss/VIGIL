@@ -23,7 +23,10 @@ enum MinistryMark {
     /// into AppKit's y-up space. Even-odd winding punches the eye out of the
     /// triangle and drops the pupil back in, so it works as a template image
     /// where only alpha survives.
-    static func glyph(height: CGFloat) -> NSImage {
+    /// Pass a colour to get a tinted, non-template image. A template image
+    /// takes the menu bar's own colour and cannot be made red, and red is what
+    /// a recording indicator has to be.
+    static func glyph(height: CGFloat, color: NSColor? = nil) -> NSImage {
         let artWidth: CGFloat = 184, artHeight: CGFloat = 150   // x −92…92, y −50…100
         let scale = height / artHeight
         let size = NSSize(width: (artWidth * scale).rounded(), height: height.rounded())
@@ -52,11 +55,11 @@ enum MinistryMark {
             path.appendOval(in: NSRect(x: -22, y: -30, width: 44, height: 44))
 
             path.windingRule = .evenOdd
-            NSColor.black.setFill()
+            (color ?? .black).setFill()
             path.fill()
             return true
         }
-        image.isTemplate = true
+        image.isTemplate = (color == nil)
         return image
     }
 }

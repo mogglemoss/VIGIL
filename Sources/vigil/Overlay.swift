@@ -29,11 +29,15 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
     }
 
     private static let size = NSSize(width: 408, height: 88)
+    /// A pilot's name gets a row of its own. It was being cut into the state
+    /// line ("Cormorant Fe"), and half a name reads as a rendering fault.
+    private static let sizeWithPilot = NSSize(width: 408, height: 110)
     private static let sealSize: CGFloat = 64
 
     private var window: NSWindow?
     private var label: NSTextField?
     private var detail: NSTextField?
+    private var pilot: NSTextField?
     private var hideWorkItem: DispatchWorkItem?
 
     /// Geist Mono if the estate's face is installed, the system monospace if not.
@@ -95,6 +99,11 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
         content.addSubview(detail)
         self.detail = detail
 
+        let pilot = NSTextField(labelWithString: "")
+        pilot.frame = NSRect(x: textLeft, y: 24, width: size.width - textLeft - 16, height: 16)
+        content.addSubview(pilot)
+        self.pilot = pilot
+
         window.contentView = content
         return window
     }
@@ -116,20 +125,39 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
     func prepare() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             DispatchQueue.main.async {
-                self.render("Vigil", stamp: "Standing", tint: Ink.fog)
+                self.render("Vigil", stamp: "Standing", pilot: nil, tint: Ink.fog)
                 continuation.resume()
             }
         }
         try? await Task.sleep(nanoseconds: 250_000_000)
     }
 
-    private func render(_ text: String, stamp stampText: String, tint: NSColor) {
+    private func render(_ text: String, stamp stampText: String,
+                        pilot pilotName: String?, tint: NSColor) {
         let window = self.window ?? build()
         self.window = window
+        // Grow for the extra row rather than reserving an empty one.
+        let wanted = pilotName == nil ? Self.size : Self.sizeWithPilot
+        if let view = window.contentView, view.frame.height != wanted.height {
+            window.setContentSize(wanted)
+            view.frame = NSRect(origin: .zero, size: wanted)
+            let shift = wanted.height - Self.size.height
+            label?.frame.origin.y = 44 + shift
+            detail?.frame.origin.y = 24 + shift
+            pilot?.frame.origin.y = 24
+            for case let seal as NSImageView in view.subviews {
+                seal.frame.origin.y = (wanted.height - Self.sealSize) / 2
+            }
+        }
         label?.attributedStringValue = Self.microCaps(text, size: 15, tracking: 0.18,
                                                       color: Ink.bone)
         detail?.attributedStringValue = Self.microCaps(stampText, size: 9.5,
                                                       tracking: 0.16, color: tint)
+        pilot?.isHidden = pilotName == nil
+        if let pilotName {
+            pilot?.attributedStringValue = Self.microCaps(pilotName, size: 11,
+                                                          tracking: 0.16, color: Ink.rust)
+        }
         reposition(window)
         window.alphaValue = 1
         window.orderFrontRegardless()   // never makeKeyAndOrderFront
@@ -151,7 +179,8 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             DispatchQueue.main.async {
                 for (name, text, stampText, tint) in states {
-                    self.render(text, stamp: stampText, tint: tint)
+                    self.render(text, stamp: stampText,
+                                pilot: name == "2-witnessing" ? "Cormorant Fell" : nil, tint: tint)
                     guard let view = self.window?.contentView,
                           let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
                     else { continue }
@@ -172,11 +201,11 @@ final class Overlay: @unchecked Sendable {   // only ever touched on main
         }
     }
 
-    func flash(_ text: String, stamp stampText: String,
+    func flash(_ text: String, stamp stampText: String, pilot: String? = nil,
                tint: NSColor = Ink.sage, seconds: TimeInterval = 1.8) {
         DispatchQueue.main.async {
             self.hideWorkItem?.cancel()
-            self.render(text, stamp: stampText, tint: tint)
+            self.render(text, stamp: stampText, pilot: pilot, tint: tint)
 
             let hide = DispatchWorkItem { [weak self] in
                 guard let window = self?.window else { return }

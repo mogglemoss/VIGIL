@@ -169,6 +169,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             guard let self else { return MenuBar.State() }
             var state = MenuBar.State()
             state.observing = self.ring != nil
+            state.attached = self.videoAttached
             state.clipping = self.clip != nil
             state.heldSeconds = self.ring?.heldSeconds ?? 0
             state.windowSeconds = self.ring?.window ?? self.config.length
@@ -227,8 +228,8 @@ final class Controller: NSObject, NSApplicationDelegate {
             do {
                 try await attachVideo()
                 awaiting = false
-                overlay.flash("Observing", stamp: "Watching \(video.displayDescription.prefix(24))",
-                              seconds: 2.4)
+                overlay.flash("Observing", stamp: "Watching the client",
+                              pilot: video.pilotName, seconds: 2.4)
                 Log.good("attached to \(video.displayDescription)")
                 return
             } catch let missing as VideoCapture.TargetMissing {
@@ -328,7 +329,7 @@ final class Controller: NSObject, NSApplicationDelegate {
             }
             Chime.latch.play()
             let from = String(format: "%.0f", snapshot.seconds)
-            overlay.flash("Witnessing", stamp: "from −\(from) s",
+            overlay.flash("Witnessing", stamp: "from −\(from) s", pilot: video.pilotName,
                           tint: Overlay.Ink.bright, seconds: 2.4)
             Log.good("clip open — \(from) s of buffer, recording live → \(url.lastPathComponent)")
             if !snapshot.coversFullWindow {
@@ -364,7 +365,7 @@ final class Controller: NSObject, NSApplicationDelegate {
 
         Chime.stamp.play()
         overlay.flash("Filed", stamp: String(format: "%.0f s", result.seconds),
-                      tint: Overlay.Ink.sage, seconds: 2.6)
+                      pilot: video.pilotName, tint: Overlay.Ink.sage, seconds: 2.6)
         Log.good(String(format: "saved %.1f s (%.0f s buffered + %.0f s live) · %.0f MB · muxed in %.2f s",
                         result.seconds, writer.startedFrom, live,
                         Double(result.bytes) / 1_048_576, took))

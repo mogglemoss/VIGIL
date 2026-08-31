@@ -11,6 +11,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
 
     struct State {
         var observing = false
+        var attached = false
         var clipping = false
         var heldSeconds = Double.zero
         var windowSeconds = Double.zero
@@ -59,11 +60,24 @@ final class MenuBar: NSObject, NSMenuDelegate {
     func refresh() {
         let state = readState()
         guard let button = statusItem?.button else { return }
-        // The glyph stays put; the clock beside it is what changes. Swapping
-        // the mark itself would read as a different app.
-        button.image = MinistryMark.glyph(height: 15)
-        button.title = state.clipping ? " " + Self.clock(state.clipSeconds) : ""
-        button.contentTintColor = state.clipping ? Overlay.Ink.bright : nil
+        // Three states, three readings, same mark — swapping the glyph itself
+        // would read as a different app.
+        //
+        //   waiting    dimmed, no clock      nothing is being held
+        //   observing  normal, no clock      the ring is filling
+        //   witnessing RED, with a clock     a record is open
+        //
+        // Red is drawn into the image rather than applied as a tint: a template
+        // image takes the menu bar's own colour and cannot be made red.
+        if state.clipping {
+            button.image = MinistryMark.glyph(height: 15, color: Overlay.Ink.blood)
+            button.title = " " + Self.clock(state.clipSeconds)
+            button.appearsDisabled = false
+        } else {
+            button.image = MinistryMark.glyph(height: 15)
+            button.title = ""
+            button.appearsDisabled = !state.attached
+        }
     }
 
     private static func clock(_ seconds: Double) -> String {
@@ -78,15 +92,24 @@ final class MenuBar: NSObject, NSMenuDelegate {
         menu.removeAllItems()
 
         let headline: String
+        let second: String
         if state.clipping {
             headline = "Witnessing · \(Self.clock(state.clipSeconds))"
-        } else if state.observing {
+            second = String(format: "%.2f GB in memory", state.gigabytes)
+        } else if state.attached {
             headline = "Observing · \(Self.clock(state.heldSeconds)) of \(Self.clock(state.windowSeconds)) held"
+            second = String(format: "%.2f GB in memory", state.gigabytes)
+        } else if state.observing {
+            // Standing, but with nothing to watch. Say so plainly: an idle
+            // watch and a filling one must not look the same.
+            headline = "Waiting for the EVE client"
+            second = "Nothing is being held. The launcher does not count."
         } else {
             headline = "Starting"
+            second = ""
         }
         menu.addItem(Self.disabled(headline))
-        menu.addItem(Self.disabled(String(format: "%.2f GB in memory", state.gigabytes)))
+        if !second.isEmpty { menu.addItem(Self.disabled(second)) }
         menu.addItem(Self.disabled(state.audioAttached
                                    ? "Audio · \(state.audioDescription)"
                                    : "Audio · awaiting \(state.audioDescription)"))
@@ -96,7 +119,7 @@ final class MenuBar: NSObject, NSMenuDelegate {
             title: state.clipping ? "Stop and file the clip" : "Enter into the record",
             action: #selector(toggleClip), keyEquivalent: "")
         action.target = self
-        action.isEnabled = state.observing
+        action.isEnabled = state.attached
         menu.addItem(action)
         menu.addItem(.separator())
 

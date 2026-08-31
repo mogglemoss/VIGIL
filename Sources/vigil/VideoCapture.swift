@@ -78,20 +78,46 @@ final class VideoCapture: NSObject, SCStreamOutput, SCStreamDelegate {
 
     // MARK: - Resolving the target
 
-    /// A window is EVE's if its owner matches by bundle identifier (exactly or
-    /// as a prefix) or by application name. Unlike Core Audio — which reports
-    /// no bundle for the client at all — ScreenCaptureKit names it properly as
-    /// com.ccpgames.eveonline.
+    /// Matching an owning application to a name the pilot configured.
+    ///
+    /// This was too loose and aimed the watch at the wrong thing: the old rule
+    /// stripped ".app" off the token and substring-matched the application name,
+    /// so "EVE.app" became "EVE" and matched **eve-online** — the launcher. With
+    /// VIGIL standing before the game started, the launcher was the only match,
+    /// and it recorded that instead.
+    ///
+    /// Now: the bundle identifier exactly or as a dotted prefix, the application
+    /// name exactly, or the executable path containing the token. The launcher
+    /// lives at /Applications/eve-online.app and the client at
+    /// .../SharedCache/tq/EVE.app, so a path test separates them where a name
+    /// test cannot.
     private static func matches(_ token: String, _ app: SCRunningApplication) -> Bool {
         let bundle = app.bundleIdentifier
-        if bundle == token || bundle.hasPrefix(token + ".") { return true }
-        if app.applicationName.range(of: token, options: .caseInsensitive) != nil { return true }
-        // "EVE.app" is the audio-side handle; accept it here too so one setting
-        // can drive both.
-        if token.hasSuffix(".app"),
-           app.applicationName.range(of: String(token.dropLast(4)),
-                                     options: .caseInsensitive) != nil { return true }
-        return false
+        if !bundle.isEmpty, bundle == token || bundle.hasPrefix(token + ".") { return true }
+        if app.applicationName.caseInsensitiveCompare(token) == .orderedSame { return true }
+        guard let path = AudioProcesses.executablePath(forPID: app.processID) else { return false }
+        return path.range(of: token, options: .caseInsensitive) != nil
+    }
+
+    /// The best window for these names right now, or nil. Separated out so the
+    /// choice can be re-made while running: attaching to the launcher and never
+    /// looking again is how six minutes of it got recorded.
+    func bestWindow(in content: SCShareableContent, names: [String]) -> SCWindow? {
+        content.windows.filter { window in
+            guard let owner = window.owningApplication else { return false }
+            guard names.contains(where: { Self.matches($0, owner) }) else { return false }
+            return window.frame.width > 200 && window.frame.height > 200
+        }.max { ($0.frame.width * $0.frame.height) < ($1.frame.width * $1.frame.height) }
+    }
+
+    /// Is a different window now the better target? Called while attached, so a
+    /// game window appearing after a launcher window is picked up.
+    func betterTargetAvailable(names: [String]) async -> Bool {
+        guard let targetWindowID else { return false }
+        guard let content = try? await SCShareableContent.excludingDesktopWindows(
+            false, onScreenWindowsOnly: false) else { return false }
+        guard let best = bestWindow(in: content, names: names) else { return false }
+        return best.windowID != targetWindowID
     }
 
     private func resolve(_ target: CaptureTarget) async throws -> (SCContentFilter, String) {
@@ -119,14 +145,7 @@ final class VideoCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         case .app(let names):
             // The largest real window the app owns. Games spawn tooltip and
             // helper windows; the one being played is the big one.
-            let candidates = content.windows.filter { window in
-                guard let owner = window.owningApplication else { return false }
-                guard names.contains(where: { Self.matches($0, owner) }) else { return false }
-                return window.frame.width > 200 && window.frame.height > 200
-            }
-            guard let window = candidates.max(by: {
-                ($0.frame.width * $0.frame.height) < ($1.frame.width * $1.frame.height)
-            }) else {
+            guard let window = bestWindow(in: content, names: names) else {
                 throw TargetMissing(names: names)
             }
             excludedSelf = true   // nothing but this window is in the filter
