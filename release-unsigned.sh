@@ -27,7 +27,13 @@ VERSION="${1:-}"
 
 OUT=".build/artifacts"
 APP="$OUT/VIGIL.app"
-ZIP=".build/VIGIL-$VERSION-unsigned.zip"
+# The artifact name deliberately carries no version. GitHub serves the newest
+# release's assets at /releases/latest/download/<name>, but only if <name> is
+# the same every time, so a versioned filename means every published download
+# link rots at the next release. The version is in the tag, the release title
+# and Info.plist, which is where a reader looks for it anyway. VAGARI is
+# packaged the same way for the same reason.
+ZIP=".build/VIGIL-macos-unsigned.zip"
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" Resources/Info.plist
